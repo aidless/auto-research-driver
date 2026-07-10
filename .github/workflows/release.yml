@@ -103,17 +103,19 @@ jobs:
           echo "Version: ${VERSION}"
 
       - name: Build skill archive
-        run: |
-          # 排除 .git / __pycache__ / .coverage / htmlcov / ci/logs
-          tar --exclude='.git' \
-              --exclude='__pycache__' \
-              --exclude='*.pyc' \
-              --exclude='.coverage' \
-              --exclude='htmlcov' \
-              --exclude='ci/logs' \
-              --exclude='.pytest_cache' \
-              -czf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz" \
-              -C "${{ github.workspace }}" .
+        # 2026-07-10: 改成单行 tar 避免 multi-line yaml literal block
+        # + bash line continuation 的解析问题（之前 8 行 tar 0 秒 fail）
+        # 排除 .git / __pycache__ / *.pyc / .coverage / htmlcov / ci/logs / .pytest_cache
+        run: >
+          tar --exclude=.git
+          --exclude=__pycache__
+          --exclude='*.pyc'
+          --exclude=.coverage
+          --exclude=htmlcov
+          --exclude=ci/logs
+          --exclude=.pytest_cache
+          -czf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz"
+          -C "${{ github.workspace }}" .
 
       - name: List archive contents
         run: tar -tzf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz" | head -30
