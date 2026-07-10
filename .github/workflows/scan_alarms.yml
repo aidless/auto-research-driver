@@ -40,10 +40,10 @@ jobs:
         uses: actions/checkout@v4
 
       # ---------- 2. 装 Python ----------
-      - name: Setup Python 3.9
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.12"
 
       # ---------- 3. 准备 fixture：4 个 mock paper 场景 ----------
       # 为什么 mock：scan_alarms.py 默认扫 F:\Research\ (Windows 专属)，
@@ -110,7 +110,7 @@ jobs:
         id: scan
         run: |
           set -e
-          py -3 scripts/scan_alarms.py \
+          python3 scripts/scan_alarms.py \
             --root /tmp/papers \
             --output-dir /tmp/alarms \
             --stale-days 30
@@ -132,7 +132,7 @@ jobs:
 
           echo ""
           echo "=== Latest JSON summary ==="
-          py -3 -c "
+          python3 -c "
           import json
           d = json.load(open('/tmp/alarms/alarms_latest.json'))
           print('papers scanned:', d['scan_meta']['n_papers'])
@@ -166,7 +166,7 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/empty
-          py -3 scripts/scan_alarms.py --root /tmp/empty --quiet --output-dir /tmp/alarms
+          python3 scripts/scan_alarms.py --root /tmp/empty --quiet --output-dir /tmp/alarms
           # 0 alarms + 0 critical → rc=0
 
       # ---------- 7. 单独验证: --json-only 不写 markdown ----------
@@ -174,7 +174,7 @@ jobs:
         run: |
           set -e
           rm -f /tmp/alarms/REPORT.md
-          py -3 scripts/scan_alarms.py --root /tmp/papers --json-only --output-dir /tmp/alarms
+          python3 scripts/scan_alarms.py --root /tmp/papers --json-only --output-dir /tmp/alarms
           if [ -f /tmp/alarms/REPORT.md ]; then
             echo "::error::REPORT.md should NOT exist with --json-only"
             exit 1
@@ -186,7 +186,7 @@ jobs:
         run: |
           set -e
           rm -f /tmp/alarms/alarms_latest.json
-          py -3 scripts/scan_alarms.py --root /tmp/papers --md-only --output-dir /tmp/alarms
+          python3 scripts/scan_alarms.py --root /tmp/papers --md-only --output-dir /tmp/alarms
           if [ -f /tmp/alarms/alarms_latest.json ]; then
             echo "::error::alarms_latest.json should NOT exist with --md-only"
             exit 1
@@ -201,7 +201,7 @@ jobs:
             echo "## 🔍 scan_alarms.py smoke test"
             echo ""
             echo "- **Runner**: ubuntu-latest"
-            echo "- **Python**: 3.9"
+            echo "- **Python**: 3.12"
             echo "- **Fixture**: \`/tmp/papers\` (4 mock papers)"
             echo "- **Scan result**: \`${{ steps.scan.outputs.scan_rc_acceptable }}\`"
             echo ""

@@ -10,7 +10,7 @@ name: CI
 #
 # 流程：
 #   1. checkout 代码
-#   2. setup Python 3.9（与本地一致，避开 3.11 encodings 坑）
+#   2. setup Python 3.12（3.9 在 GitHub Actions 已 EOL，pre-built 镜像不可用）
 #   3. pip install coverage（PEP 668 环境用 --break-system-packages）
 #   4. 调用 ci/run_tests.py --full（unit + coverage + smoke + HTML）
 #   5. 上传 coverage HTML + .coverage 数据为 artifacts
@@ -52,10 +52,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.9
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.12"
           # 缓存 pip 包（key 含 hash 自动失效）
           cache: "pip"
 
