@@ -174,11 +174,13 @@ jobs:
           # 0 alarms + 0 critical → rc=0
 
       # ---------- 7. 单独验证: --json-only 不写 markdown ----------
+      # 同样关键：scan_alarms.py 故意 exit 2（critical alarm），必须用 || true 吞掉
+      # 不然 set -e 会让 shell 提前终止，根本走不到下面的 [ -f ] 判断。
       - name: json-only should not write REPORT.md
         run: |
           set -e
           rm -f /tmp/alarms/REPORT.md
-          python3 scripts/scan_alarms.py --root /tmp/papers --json-only --output-dir /tmp/alarms
+          python3 scripts/scan_alarms.py --root /tmp/papers --json-only --output-dir /tmp/alarms || true
           if [ -f /tmp/alarms/REPORT.md ]; then
             echo "::error::REPORT.md should NOT exist with --json-only"
             exit 1
@@ -186,11 +188,12 @@ jobs:
           echo "✅ --json-only correctly skipped REPORT.md"
 
       # ---------- 8. 单独验证: --md-only 不写 JSON ----------
+      # 同样关键：|| true 吞掉 exit 2（critical alarm 是预期行为）
       - name: md-only should not write JSON
         run: |
           set -e
           rm -f /tmp/alarms/alarms_latest.json
-          python3 scripts/scan_alarms.py --root /tmp/papers --md-only --output-dir /tmp/alarms
+          python3 scripts/scan_alarms.py --root /tmp/papers --md-only --output-dir /tmp/alarms || true
           if [ -f /tmp/alarms/alarms_latest.json ]; then
             echo "::error::alarms_latest.json should NOT exist with --md-only"
             exit 1
