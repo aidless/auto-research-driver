@@ -151,6 +151,32 @@ def cmd_alarms(args) -> int:
     return 0
 
 
+def cmd_scan_alarms(args) -> int:
+    """子命令: scan-alarms [scan_alarms.py 的全部参数]
+
+    转发到 scan_alarms.main_with_args()，让 driver.cmd 仍是单一入口。
+    默认参数：--root F:\\Research，--output-dir F:\\Research\\_ALARMS。
+
+    用法：
+      driver scan-alarms
+      driver scan-alarms --stale-days 14 --quiet
+      driver scan-alarms --root D:\\papers --json-only
+
+    设计：直接调用 scan_alarms.main_with_args(namespace) 而不是 sys.argv 注入，
+    避免 monkey-patch。
+    """
+    sa_args = argparse.Namespace(
+        root=Path(args.root) if getattr(args, "root", None) else Path(r"F:\Research"),
+        output_dir=Path(args.output_dir) if getattr(args, "output_dir", None) else Path(r"F:\Research\_ALARMS"),
+        stale_days=int(args.stale_days) if getattr(args, "stale_days", None) is not None else 30,
+        json_only=bool(getattr(args, "json_only", False)),
+        md_only=bool(getattr(args, "md_only", False)),
+        quiet=bool(getattr(args, "quiet", False)),
+    )
+    import scan_alarms
+    return scan_alarms.main_with_args(sa_args)
+
+
 def cmd_run(args) -> int:
     """子命令: run — 跑流水线主入口。
 
@@ -475,6 +501,21 @@ def main() -> int:
     p_al.add_argument("--show-rules", action="store_true",
                       help="同时打印 STAGE_BUDGET_RULES 和当前 budget 覆盖")
     p_al.set_defaults(func=cmd_alarms)
+
+    # scan-alarms (2026-07-10 增)：跨多 paper 报警扫描
+    p_sa = sub.add_parser("scan-alarms", help="扫描所有 paper 目录，生成报警汇总报告")
+    _sa_root_default = Path(r"F:\Research")
+    _sa_out_default = Path(r"F:\Research\_ALARMS")
+    p_sa.add_argument("--root", type=Path, default=None,
+                      help="paper 根目录 (默认 {})".format(_sa_root_default))
+    p_sa.add_argument("--output-dir", type=Path, default=None,
+                      help="报告输出目录 (默认 {})".format(_sa_out_default))
+    p_sa.add_argument("--stale-days", type=int, default=None,
+                      help="stale 阈值天数 (默认 30)")
+    p_sa.add_argument("--json-only", action="store_true", help="只输出 JSON")
+    p_sa.add_argument("--md-only", action="store_true", help="只输出 Markdown")
+    p_sa.add_argument("--quiet", action="store_true", help="不打印摘要到 stdout")
+    p_sa.set_defaults(func=cmd_scan_alarms)
 
     # provider-check
     p_pc = sub.add_parser("provider-check", help="验证 MiniMax provider 配置")

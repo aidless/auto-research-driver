@@ -1,12 +1,38 @@
 # auto-research-driver GitHub Actions Workflows
 
-本目录包含 3 个 GitHub Actions workflow，统一调用 `ci/run_tests.py`：
+本目录包含 5 个 GitHub Actions workflow：
 
-| Workflow | 触发 | 用途 | 频率 |
-|----------|------|------|------|
-| `ci.yml` | push / PR / manual | **主 CI** — 跑单元 + 集成 + coverage + HTML | 每次 commit |
-| `nightly.yml` | cron 每周一 02:00 UTC / manual | **回归测试** — 防止外部依赖升级破坏 | 每周 1 次 |
-| `release.yml` | push `v*.*.*` tag / manual | **发布** — 跑 quick test + 打包 + GitHub Release | 手动 / tag 触发 |
+| Workflow | 触发 | 用途 | Runner | 频率 |
+|----------|------|------|--------|------|
+| `ci.yml` | push / PR / manual | **主 CI** — 跑单元 + 集成 + coverage + HTML | ubuntu | 每次 commit |
+| `nightly.yml` | cron 每周一 02:00 UTC / manual | **回归测试** — 防止外部依赖升级破坏 | ubuntu | 每周 1 次 |
+| `release.yml` | push `v*.*.*` tag / manual | **发布** — 跑 quick test + 打包 + GitHub Release | ubuntu | 手动 / tag 触发 |
+| `scan_alarms.yml` | push / PR / manual | **scan_alarms.py smoke** — 跨多 paper 报警扫描 + 6 个断言 | ubuntu | 每次 commit |
+| `driver-windows-smoke.yml` | manual only | **driver.cmd Windows smoke** — 验证 Windows shim 在 windows-latest 上跑通 | **windows** | 手动 |
+
+> 主 CI 与 nightly/release 统一调用 `ci/run_tests.py`；`scan_alarms.yml` 直接调 `scripts/scan_alarms.py`；`driver-windows-smoke.yml` 直接调 `bin\driver.cmd`。
+
+### `driver-windows-smoke.yml` — Windows shim 烟雾测试
+
+**触发条件**：仅手动 `workflow_dispatch`（无 push/PR 自动触发，节省 Windows runner 配额）。
+
+**为什么需要**：
+- `bin\driver.cmd` 是 Windows 专属 shim，**在 ubuntu runner 上跑不了**（`.cmd` 文件会立刻失败）
+- 主 CI 用 ubuntu，但本地开发者在 Windows 上用 `driver.cmd` 调用
+- 这个 workflow 用 `windows-latest` runner 验证 shim 在 Windows 上真能跑通 + exit code 链保真（0 / 2）
+
+**关键设计**：
+- 10 个步骤：checkout → setup-python → 准备 fixture → `driver.cmd --help` → `driver.cmd scan-alarms --help` → 真跑 + 关键 step → 校验产物 + 6 个断言 → 空 root → step summary → 上传 artifact
+- fixture 用 `%TEMP%\papers\`（避免默认 `F:\Research` 在 runner 上不存在）
+- 6 个断言：2 papers scanned / 有 critical / PAPER_CLEAN 0 alarm / latex_error category / 空 root exit 0
+- `workflow_dispatch` input `stale_days` 透传给 `driver.cmd scan-alarms --stale-days`
+- artifact `driver-cmd-windows-report` 保留 14 天
+
+**调用方式**：
+```powershell
+# 在 GitHub Actions UI 手动触发
+# 路径: Actions → driver.cmd Windows smoke → Run workflow → [可选: stale_days]
+```
 
 ## 依赖
 

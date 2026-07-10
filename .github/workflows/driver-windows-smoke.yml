@@ -1,0 +1,227 @@
+name: driver.cmd Windows smoke
+
+# ============================================================
+# Windows-only smoke test for bin/driver.cmd scan-alarms
+# ============================================================
+# 触发：仅手动 workflow_dispatch
+# 为什么不手动-only：
+#   - driver.cmd 是 Windows 专属 shim（Linux runner 上跑 .cmd 会立刻失败）
+#   - Windows runner 配额 10 倍于 Linux，避免 push/PR 自动触发浪费配额
+#   - 只有需要验证 Windows shim 链时才手动跑
+#
+# 流程：
+#   1. checkout 代码
+#   2. Setup Python 3.9（与本地一致）
+#   3. driver.cmd --help 验证 shim 注册了所有子命令
+#   4. driver.cmd scan-alarms --quiet 真跑，验证 exit code 链
+#      (exit 0=clean / exit 2=critical，与 scan_alarms.py 一致)
+#   5. 上传 REPORT.md + JSON 作为 artifact
+# ============================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      stale_days:
+        description: "stale 阈值天数 (透传给 driver.cmd scan-alarms)"
+        required: false
+        default: "30"
+        type: string
+
+# 不需要 concurrency group (manual-only, 不会撞)
+permissions:
+  contents: read
+
+jobs:
+  driver_cmd_smoke:
+    name: driver.cmd on Windows
+    runs-on: windows-latest
+    timeout-minutes: 5
+
+    steps:
+      # ---------- 1. 拉代码 ----------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- 2. 装 Python ----------
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # ---------- 3. 准备一个临时 paper 目录（Windows 路径） ----------
+      # 为什么 mock: 默认 root 是 F:\Research\，Windows runner 上不存在
+      # 用 %TEMP%\papers 模拟一个干净 + 一个带 LaTeX error 的 paper 集合
+      - name: Prepare fixture papers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $FIXTURE = Join-Path $env:TEMP "papers"
+          $ALARMS = Join-Path $env:TEMP "alarms"
+          Remove-Item -Recurse -Force $FIXTURE, $ALARMS -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $FIXTURE, $ALARMS -Force | Out-Null
+
+          # Scenario A: 干净的 paper（driver 接管，state 健康，无 alarm）
+          $cleanDir = Join-Path $FIXTURE "PAPER_CLEAN"
+          $cleanDriverDir = Join-Path $cleanDir ".driver"
+          New-Item -ItemType Directory -Path $cleanDriverDir -Force | Out-Null
+          @"
+          {
+            "stage": "s6_submit",
+            "completed": ["s1_idea", "s2_lit", "s3_outline", "s4_draft", "s5_review", "s6_submit"],
+            "alarms": [],
+            "scores": {"v24_final": 8.4},
+            "run_count": 0
+          }
+          "@ | Out-File -FilePath (Join-Path $cleanDriverDir "state.json") -Encoding utf8
+          "" | Out-File -FilePath (Join-Path $cleanDir "main.tex") -Encoding utf8
+          "" | Out-File -FilePath (Join-Path $cleanDir "main.pdf") -Encoding utf8
+          "" | Out-File -FilePath (Join-Path $cleanDir "refs.bib") -Encoding utf8
+
+          # Scenario B: 非 driver paper，main.log 含 LaTeX error
+          $failDir = Join-Path $FIXTURE "PAPER_LATEX_FAIL"
+          New-Item -ItemType Directory -Path $failDir -Force | Out-Null
+          "" | Out-File -FilePath (Join-Path $failDir "main.tex") -Encoding utf8
+          @"
+          This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023)
+          ! LaTeX Error: File `nonexistent.sty' not found.
+          Type X to quit or <RETURN> to proceed,
+          "@ | Out-File -FilePath (Join-Path $failDir "main.log") -Encoding utf8
+
+          Write-Host "=== Fixture structure ==="
+          Get-ChildItem -Path $FIXTURE -Recurse | Select-Object FullName
+
+      # ---------- 4. driver.cmd --help 验证 shim ----------
+      - name: driver.cmd --help
+        shell: cmd
+        run: |
+          chcp 65001 > nul
+          .\bin\driver.cmd --help
+
+      # ---------- 5. driver.cmd scan-alarms --help 验证子命令注册 ----------
+      - name: driver.cmd scan-alarms --help
+        shell: cmd
+        run: |
+          chcp 65001 > nul
+          .\bin\driver.cmd scan-alarms --help
+
+      # ---------- 6. driver.cmd scan-alarms 真跑（关键 step） ----------
+      - name: driver.cmd scan-alarms (real run)
+        id: scan
+        shell: cmd
+        run: |
+          chcp 65001 > nul
+          .\bin\driver.cmd scan-alarms ^
+            --root "%TEMP%\papers" ^
+            --output-dir "%TEMP%\alarms" ^
+            --stale-days %STALE_DAYS% ^
+            --quiet
+          set SCAN_RC=%ERRORLEVEL%
+          echo scan_rc=%SCAN_RC%
+          if %SCAN_RC% neq 0 if %SCAN_RC% neq 2 (
+            echo ERRORLEVEL=%SCAN_RC% — unexpected exit code
+            exit /b 1
+          )
+          echo scan_rc_acceptable=true>> %GITHUB_OUTPUT%
+        env:
+          STALE_DAYS: ${{ github.event.inputs.stale_days || '30' }}
+
+      # ---------- 7. 校验产物 + 关键断言 ----------
+      - name: Verify outputs and assertions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ALARMS = Join-Path $env:TEMP "alarms"
+
+          Write-Host "=== Output files ==="
+          Get-ChildItem -Path $ALARMS | Select-Object Name, Length
+
+          # 断言 1: REPORT.md 存在
+          $reportMd = Join-Path $ALARMS "REPORT.md"
+          if (-not (Test-Path $reportMd)) {
+            Write-Error "REPORT.md missing"
+            exit 1
+          }
+
+          # 断言 2: alarms_latest.json 存在且可解析
+          $latestJson = Join-Path $ALARMS "alarms_latest.json"
+          if (-not (Test-Path $latestJson)) {
+            Write-Error "alarms_latest.json missing"
+            exit 1
+          }
+          $data = Get-Content $latestJson -Raw | ConvertFrom-Json
+
+          Write-Host ""
+          Write-Host "=== Latest JSON summary ==="
+          Write-Host "papers scanned: $($data.scan_meta.n_papers)"
+          Write-Host "by_severity: $($data.summary.by_severity | ConvertTo-Json -Compress)"
+          Write-Host "by_category: $($data.summary.by_category | ConvertTo-Json -Compress)"
+          Write-Host "papers_with_alarms: $($data.summary.papers_with_alarms)"
+
+          # 断言 3: 扫到 2 个 paper
+          if ($data.scan_meta.n_papers -ne 2) {
+            Write-Error "expected 2 papers, got $($data.scan_meta.n_papers)"
+            exit 1
+          }
+          # 断言 4: 有 1 critical (latex_error)
+          if ($data.summary.by_severity.critical -lt 1) {
+            Write-Error "expected at least 1 critical, got $($data.summary.by_severity.critical)"
+            exit 1
+          }
+          # 断言 5: PAPER_CLEAN 必须 0 alarm
+          $clean = $data.papers | Where-Object { $_.name -eq "PAPER_CLEAN" } | Select-Object -First 1
+          if ($clean.n_alarms -ne 0) {
+            Write-Error "PAPER_CLEAN should have 0 alarms, got $($clean.n_alarms)"
+            exit 1
+          }
+          # 断言 6: latex_error category 必须出现
+          if (-not $data.summary.by_category.latex_error) {
+            Write-Error "expected latex_error category"
+            exit 1
+          }
+          Write-Host ""
+          Write-Host "✅ All 6 assertions passed"
+
+      # ---------- 8. 单独验证：空 root → rc=0 ----------
+      - name: Empty root should exit 0
+        shell: cmd
+        run: |
+          chcp 65001 > nul
+          mkdir "%TEMP%\empty"
+          .\bin\driver.cmd scan-alarms --root "%TEMP%\empty" --output-dir "%TEMP%\alarms" --quiet
+          if %ERRORLEVEL% neq 0 (
+            echo ERRORLEVEL=%ERRORLEVEL% — expected 0 for clean run
+            exit /b 1
+          )
+          echo ✅ Empty root returns exit 0
+
+      # ---------- 9. 写 step summary ----------
+      - name: Write step summary
+        if: always()
+        shell: pwsh
+        run: |
+          $reportMd = Join-Path $env:TEMP "alarms\REPORT.md"
+          $summary = @"
+          ## 🪟 driver.cmd Windows smoke test
+          ""
+          $summary += "- **Runner**: windows-latest`n"
+          $summary += "- **Python**: 3.9`n"
+          $summary += "- **Fixture**: ``%TEMP%\papers`` (2 mock papers)`n"
+          $summary += "- **Scan result**: ``${{ steps.scan.outputs.scan_rc_acceptable }}```n"
+          $summary += ""
+          if (Test-Path $reportMd) {
+            $summary += "### Severity distribution`n`n"
+            $summary += '```' + "`n"
+            $summary += (Get-Content $reportMd -Raw | Select-String -Pattern "(critical|warning|info)\s+\|" -CaseSensitive:$false | Select-Object -First 10 | Out-String)
+            $summary += '```' + "`n"
+          }
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      # ---------- 10. 上传报告作为 artifact ----------
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: driver-cmd-windows-report
+          path: ${{ env.TEMP }}/alarms/
+          retention-days: 14
+          if-no-files-found: warn

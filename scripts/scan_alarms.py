@@ -400,7 +400,8 @@ def render_json(results: list, root: Path, stale_days: int) -> dict:
 # --- 入口 ---
 
 
-def main() -> int:
+def _build_argparser() -> argparse.ArgumentParser:
+    """构造 argparse。供 main() 和 driver.cmd scan-alarms 共用。"""
     ap = argparse.ArgumentParser(
         prog="scan_alarms",
         description="多 paper 流水线报警扫描器 (read-only)",
@@ -414,8 +415,11 @@ def main() -> int:
     ap.add_argument("--json-only", action="store_true", help="只输出 JSON,不写 Markdown")
     ap.add_argument("--md-only", action="store_true", help="只输出 Markdown,不写 JSON")
     ap.add_argument("--quiet", action="store_true", help="不打印摘要到 stdout")
-    args = ap.parse_args()
+    return ap
 
+
+def main_with_args(args: argparse.Namespace) -> int:
+    """带已构造 Namespace 的入口。供 driver.cmd scan-alarms 调用。"""
     if not args.root.exists():
         print(f"ERROR: root not found: {args.root}", file=sys.stderr)
         return 1
@@ -461,6 +465,13 @@ def main() -> int:
 
     # exit code: 0=clean, 2=有 critical (让 cron / scheduler 能区分)
     return 0 if n_critical == 0 else 2
+
+
+def main() -> int:
+    """CLI 入口: parse argv → main_with_args()。"""
+    ap = _build_argparser()
+    args = ap.parse_args()
+    return main_with_args(args)
 
 
 if __name__ == "__main__":
