@@ -9,9 +9,8 @@ name: Release
 #
 # 流程：
 #   1. 跑全量 CI（quick → 必须 100% 通过才发布）
-#   2. 打包 skill 为 zip（git archive 风格）
-#   3. 创建 GitHub Release 并上传 zip
-#   4. 把 coverage HTML 作为单独的 artifact
+#   2. 打包 skill 为 tar.gz（git archive 风格）
+#   3. 创建 GitHub Release 并上传 tar.gz
 # ============================================================
 
 on:
@@ -61,7 +60,7 @@ jobs:
       - name: Run quick CI (unit only)
         id: check
         # release 前必须 100% pass
-        # 2026-07-10: 加 tee ci_run.log + artifact upload,失败时可下载诊断
+        # 2026-07-10: 加 tee ci_run.log + artifact upload，失败时可下载诊断
         run: |
           set -e
           python ci/run_tests.py --quick 2>&1 | tee ci_run.log
@@ -103,22 +102,12 @@ jobs:
           echo "Version: ${VERSION}"
 
       - name: Build skill archive
-        # 2026-07-10: 改成单行 tar 避免 multi-line yaml literal block
-        # + bash line continuation 的解析问题（之前 8 行 tar 0 秒 fail）
+        # 2026-07-10: 完全单行 tar，yaml 不折叠，bash 直接执行
         # 排除 .git / __pycache__ / *.pyc / .coverage / htmlcov / ci/logs / .pytest_cache
-        run: >
-          tar --exclude=.git
-          --exclude=__pycache__
-          --exclude='*.pyc'
-          --exclude=.coverage
-          --exclude=htmlcov
-          --exclude=ci/logs
-          --exclude=.pytest_cache
-          -czf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz"
-          -C "${{ github.workspace }}" .
+        run: tar --exclude=.git --exclude=__pycache__ --exclude='*.pyc' --exclude=.coverage --exclude=htmlcov --exclude=ci/logs --exclude=.pytest_cache -czf auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz -C "${{ github.workspace }}" .
 
       - name: List archive contents
-        run: tar -tzf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz" | head -30
+        run: tar -tzf auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz | head -30
 
       - name: Create GitHub Release
         # SHA-pinned 第三方 action（v2.3.2 = commit 72f2c25fcb47643c292f7107632f7a47c1df5cd8）
