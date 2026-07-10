@@ -1,0 +1,225 @@
+name: scan_alarms smoke
+
+# 触发：push 到 main / PR / 手动触发
+# 不在 push 到 feature/* 时跑，避免消耗 CI 配额
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      fixture_scenario:
+        description: "Which fixture scenario to run (all/clean/latex_error/empty)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - clean
+          - latex_error
+          - empty
+
+# 取消上一次未完成的同 workflow run
+concurrency:
+  group: scan_alarms-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最低权限：只读 + 上传 artifact
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: scripts/scan_alarms.py smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # ---------- 1. 拉代码 ----------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- 2. 装 Python ----------
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # ---------- 3. 准备 fixture：4 个 mock paper 场景 ----------
+      # 为什么 mock：scan_alarms.py 默认扫 F:\Research\ (Windows 专属)，
+      # Linux runner 上不存在。用 /tmp/papers/ 模拟一个干净的 paper 集合。
+      - name: Prepare fixture papers
+        run: |
+          set -e
+          FIXTURE=/tmp/papers
+          ALARMS=/tmp/alarms
+          rm -rf "$FIXTURE" "$ALARMS"
+          mkdir -p "$FIXTURE" "$ALARMS"
+
+          # --- Scenario A: 干净的 paper（driver 接管，state 健康，无 alarm）---
+          mkdir -p "$FIXTURE/PAPER_CLEAN/.driver"
+          cat > "$FIXTURE/PAPER_CLEAN/.driver/state.json" <<'EOF'
+          {
+            "stage": "s6_submit",
+            "completed": ["s1_idea", "s2_lit", "s3_outline", "s4_draft", "s5_review", "s6_submit"],
+            "alarms": [],
+            "scores": {"v24_final": 8.4},
+            "run_count": 0
+          }
+          EOF
+          touch "$FIXTURE/PAPER_CLEAN/main.tex"
+          touch "$FIXTURE/PAPER_CLEAN/main.pdf"
+          touch "$FIXTURE/PAPER_CLEAN/refs.bib"
+
+          # --- Scenario B: driver paper, v24 分数过低 (< 7.8 质量门) ---
+          mkdir -p "$FIXTURE/PAPER_LOW_SCORE/.driver"
+          cat > "$FIXTURE/PAPER_LOW_SCORE/.driver/state.json" <<'EOF'
+          {
+            "stage": "s5_review",
+            "completed": ["s1_idea", "s2_lit", "s3_outline", "s4_draft"],
+            "alarms": [],
+            "scores": {"v24_final": 6.5},
+            "run_count": 1
+          }
+          EOF
+          touch "$FIXTURE/PAPER_LOW_SCORE/main.tex"
+
+          # --- Scenario C: 非 driver paper，但 main.log 有 LaTeX error ---
+          # 关键: 验证 latex_error detection 真的能识别 log 里的错误
+          mkdir -p "$FIXTURE/PAPER_LATEX_FAIL"
+          touch "$FIXTURE/PAPER_LATEX_FAIL/main.tex"
+          cat > "$FIXTURE/PAPER_LATEX_FAIL/main.log" <<'EOF'
+          This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023)
+          ! LaTeX Error: File `nonexistent.sty' not found.
+          Type X to quit or <RETURN> to proceed,
+          EOF
+
+          # --- Scenario D: 非 driver paper, 残留 .aux/.bbl 临时文件 ---
+          mkdir -p "$FIXTURE/PAPER_LEAK"
+          touch "$FIXTURE/PAPER_LEAK/main.tex"
+          touch "$FIXTURE/PAPER_LEAK/main.aux"
+          touch "$FIXTURE/PAPER_LEAK/main.bbl"
+          touch "$FIXTURE/PAPER_LEAK/main.blg"
+
+          echo "=== Fixture structure ==="
+          find "$FIXTURE" -type f | sort
+          echo "=== Done ==="
+
+      # ---------- 4. 跑 scan_alarms.py（JSON + Markdown 双输出） ----------
+      - name: Run scan_alarms (json + md)
+        id: scan
+        run: |
+          set -e
+          py -3 scripts/scan_alarms.py \
+            --root /tmp/papers \
+            --output-dir /tmp/alarms \
+            --stale-days 30
+          SCAN_RC=$?
+          echo "scan_rc=$SCAN_RC"
+          # 注意: rc=2 (有 critical) 是预期行为,不能 set -e
+          if [ $SCAN_RC -ne 2 ] && [ $SCAN_RC -ne 0 ]; then
+            echo "::error::unexpected exit code $SCAN_RC (expected 0 or 2)"
+            exit 1
+          fi
+          echo "scan_rc_acceptable=true" >> "$GITHUB_OUTPUT"
+
+      # ---------- 5. 校验产物 + 断言关键报警被检测到 ----------
+      - name: Verify outputs and assertions
+        run: |
+          set -e
+          echo "=== Output files ==="
+          ls -la /tmp/alarms/
+
+          echo ""
+          echo "=== Latest JSON summary ==="
+          py -3 -c "
+          import json
+          d = json.load(open('/tmp/alarms/alarms_latest.json'))
+          print('papers scanned:', d['scan_meta']['n_papers'])
+          print('by_severity:', d['summary']['by_severity'])
+          print('by_category:', d['summary']['by_category'])
+          print('papers_with_alarms:', d['summary']['papers_with_alarms'])
+
+          # 断言 1: 扫到 4 个 paper
+          assert d['scan_meta']['n_papers'] == 4, f'expected 4 papers, got {d[\"scan_meta\"][\"n_papers\"]}'
+          # 断言 2: 有 1 critical (latex_error)
+          assert d['summary']['by_severity'].get('critical', 0) >= 1, 'expected at least 1 critical'
+          # 断言 3: latex_error category 必须出现
+          assert 'latex_error' in d['summary']['by_category'], 'expected latex_error category'
+          # 断言 4: artifact_leak category 必须出现
+          assert 'artifact_leak' in d['summary']['by_category'], 'expected artifact_leak category'
+          # 断言 5: low_v24_score category 必须出现
+          assert 'low_v24_score' in d['summary']['by_category'], 'expected low_v24_score category'
+          # 断言 6: PAPER_CLEAN 必须 0 alarm
+          clean = [p for p in d['papers'] if p['name'] == 'PAPER_CLEAN'][0]
+          assert clean['n_alarms'] == 0, f'PAPER_CLEAN should have 0 alarms, got {clean[\"n_alarms\"]}'
+          print()
+          print('✅ All 6 assertions passed')
+          "
+
+          echo ""
+          echo "=== Markdown report (first 30 lines) ==="
+          head -30 /tmp/alarms/REPORT.md
+
+      # ---------- 6. 单独验证: 干净空目录 → rc=0 ----------
+      - name: Empty root should exit 0
+        run: |
+          set -e
+          mkdir -p /tmp/empty
+          py -3 scripts/scan_alarms.py --root /tmp/empty --quiet --output-dir /tmp/alarms
+          # 0 alarms + 0 critical → rc=0
+
+      # ---------- 7. 单独验证: --json-only 不写 markdown ----------
+      - name: json-only should not write REPORT.md
+        run: |
+          set -e
+          rm -f /tmp/alarms/REPORT.md
+          py -3 scripts/scan_alarms.py --root /tmp/papers --json-only --output-dir /tmp/alarms
+          if [ -f /tmp/alarms/REPORT.md ]; then
+            echo "::error::REPORT.md should NOT exist with --json-only"
+            exit 1
+          fi
+          echo "✅ --json-only correctly skipped REPORT.md"
+
+      # ---------- 8. 单独验证: --md-only 不写 JSON ----------
+      - name: md-only should not write JSON
+        run: |
+          set -e
+          rm -f /tmp/alarms/alarms_latest.json
+          py -3 scripts/scan_alarms.py --root /tmp/papers --md-only --output-dir /tmp/alarms
+          if [ -f /tmp/alarms/alarms_latest.json ]; then
+            echo "::error::alarms_latest.json should NOT exist with --md-only"
+            exit 1
+          fi
+          echo "✅ --md-only correctly skipped JSON"
+
+      # ---------- 9. 写 step summary ----------
+      - name: Write step summary
+        if: always()
+        run: |
+          {
+            echo "## 🔍 scan_alarms.py smoke test"
+            echo ""
+            echo "- **Runner**: ubuntu-latest"
+            echo "- **Python**: 3.9"
+            echo "- **Fixture**: \`/tmp/papers\` (4 mock papers)"
+            echo "- **Scan result**: \`${{ steps.scan.outputs.scan_rc_acceptable }}\`"
+            echo ""
+            if [ -f /tmp/alarms/REPORT.md ]; then
+              echo "### Severity distribution"
+              echo ""
+              echo '```'
+              grep -A 5 "## 总览" /tmp/alarms/REPORT.md | head -20 || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ---------- 10. 上传报告作为 artifact ----------
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-alarms-report
+          path: /tmp/alarms/
+          retention-days: 14
+          if-no-files-found: warn
