@@ -102,9 +102,11 @@ jobs:
           echo "Version: ${VERSION}"
 
       - name: Build skill archive
-        # 2026-07-10: 完全单行 tar，yaml 不折叠，bash 直接执行
-        # 排除 .git / __pycache__ / *.pyc / .coverage / htmlcov / ci/logs / .pytest_cache
-        run: tar --exclude=.git --exclude=__pycache__ --exclude='*.pyc' --exclude=.coverage --exclude=htmlcov --exclude=ci/logs --exclude=.pytest_cache -czf auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz -C "${{ github.workspace }}" .
+        # 2026-07-10: 用 git archive 替代 tar --exclude（之前 tar 0 秒 fail 原因不明）
+        # 优势：git archive 自动排除 .git，只打 tracked files（.pyc / .coverage 等 untracked 不打）
+        # 也不需要复杂的 --exclude 链
+        # checkout step 已用 fetch-depth: 0 → HEAD 可用
+        run: git archive --format=tar.gz --prefix=auto-research-driver-v${{ steps.ver.outputs.version }}/ -o auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz HEAD
 
       - name: List archive contents
         run: tar -tzf auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz | head -30
