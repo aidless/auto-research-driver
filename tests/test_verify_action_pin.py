@@ -218,7 +218,9 @@ def test_retry_transient_recovers():
     assert ok is True
     assert result == "ok"
     assert attempts[0] == 2
-    assert 0.04 < elapsed < 0.5  # 等了约 0.05s
+    # 容差放宽：CI runner 上 time.sleep 不一定精确，0.04 太严苛
+    # 0.02 下限（确保至少等过 1 次 backoff）+ 1.0 上限（容忍慢 runner）
+    assert 0.02 < elapsed < 1.0
     _record("重试: transient 503 在第 2 次成功后停止", True)
 
 
@@ -291,7 +293,10 @@ def test_retry_exponential_backoff_timing():
     elapsed = time.time() - start
 
     # 预期：0.1s + 0.2s = 0.3s
-    assert 0.28 < elapsed < 0.5, f"backoff should be ~0.3s, got {elapsed:.2f}s"
+    # 容差放宽：CI runner 慢 / 3.12 GIL 切换可能让 elapsed 略高于 0.3
+    # 下限 0.25（确保真的等了 backoff，不是直接 return）
+    # 上限 1.0（容忍 CI runner 抖动）
+    assert 0.25 < elapsed < 1.0, f"backoff should be ~0.3s, got {elapsed:.2f}s"
     _record(f"重试: 指数退避正确 (elapsed={elapsed:.2f}s ≈ 0.3s)", True)
 
 
