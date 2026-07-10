@@ -73,7 +73,14 @@ jobs:
 
       - name: Run CI
         # 默认 mode；workflow_dispatch 时用用户选的 mode
-        run: python ci/run_tests.py ${{ github.event.inputs.mode || '--full' }}
+        # 同时写到 ci_run.log（artifact 用）— 即使 step fail 也能拿到
+        # 完整 stdout / stderr。
+        # 注：run_tests.py 内部已经写自己的 ci/logs/ci_<timestamp>.log，
+        # 这个 ci_run.log 是冗余但带 ANSI control 字符的实时 stream，
+        # 对调试更直观。
+        run: |
+          python ci/run_tests.py ${{ github.event.inputs.mode || '--full' }} 2>&1 | tee ci_run.log
+          echo "::notice::ci_run.log saved ($(wc -l < ci_run.log) lines)"
         env:
           # 强制 SKILL_ROOT 走 checkout 目录（避免路径不一致）
           ARD_SKILL_ROOT: ${{ github.workspace }}
@@ -83,6 +90,17 @@ jobs:
           PYTHONUTF8: "1"
           LANG: C.UTF-8
           LC_ALL: C.UTF-8
+
+      - name: Upload ci_run.log (always)
+        # 即使 Run CI 失败也上传 — 这是核心 debug artifact。
+        # 配合 log 分析就能拿到 Run CI step 的完整 stdout。
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-run-log
+          path: ci_run.log
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload coverage HTML
         if: always()
