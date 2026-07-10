@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -91,6 +92,13 @@ def call_with_retry(
     """
     last_exc: BaseException | None = None
     backoff = initial_backoff
+    # GitHub Actions 会把 stderr 里以 `::warning::` 开头的行收集为 step annotation。
+    # 但在 unit test / 本地 CLI 调用时，retry 警告也会被错误收集，导致：
+    #   1. CI 5 个 warning annotation（噪声）
+    #   2. 单元测试时控制台被污染
+    # 解决：仅在 GITHUB_ACTIONS=true 环境用 GitHub annotation 格式；
+    # 其他场景用普通 [retry] 前缀输出。
+    is_ci = os.getenv("GITHUB_ACTIONS") == "true"
     for attempt in range(1, max_retries + 1):
         try:
             return True, fn()
@@ -99,11 +107,20 @@ def call_with_retry(
             transient = is_transient(e)
             if not transient or attempt >= max_retries:
                 break
-            print(
-                f"  ::warning::[{label}] attempt {attempt}/{max_retries} failed: "
-                f"{type(e).__name__}: {e} — retrying in {backoff:.1f}s",
-                file=sys.stderr,
-            )
+            if is_ci:
+                # GitHub Actions annotation（推到 step summary 顶部）
+                print(
+                    f"  ::warning::[{label}] attempt {attempt}/{max_retries} failed: "
+                    f"{type(e).__name__}: {e} — retrying in {backoff:.1f}s",
+                    file=sys.stderr,
+                )
+            else:
+                # 本地 / unit test：plain [retry] 行（不会被任何 CI 收集）
+                print(
+                    f"  [retry][{label}] attempt {attempt}/{max_retries} failed: "
+                    f"{type(e).__name__}: {e} — retrying in {backoff:.1f}s",
+                    file=sys.stderr,
+                )
             time.sleep(backoff)
             backoff *= backoff_factor
     return False, last_exc
