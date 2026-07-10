@@ -1,0 +1,160 @@
+name: CI
+
+# ============================================================
+# auto-research-driver 主 CI workflow
+# ============================================================
+# 触发：
+#   - push 到 main/master
+#   - 任何 PR（包含 draft PR）
+#   - 手动 workflow_dispatch
+#
+# 流程：
+#   1. checkout 代码
+#   2. setup Python 3.9（与本地一致，避开 3.11 encodings 坑）
+#   3. pip install coverage（PEP 668 环境用 --break-system-packages）
+#   4. 调用 ci/run_tests.py --full（unit + coverage + smoke + HTML）
+#   5. 上传 coverage HTML + .coverage 数据为 artifacts
+# ============================================================
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "CI mode"
+        required: true
+        type: choice
+        default: full
+        options:
+          - quick      # 仅单元测试
+          - default    # unit + coverage + smoke
+          - full       # unit + coverage + smoke + HTML
+          - html-only  # 仅生成 HTML（前提：已有 .coverage）
+
+# 取消上一次未完成的同 workflow run
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit + Smoke + Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          # 缓存 pip 包（key 含 hash 自动失效）
+          cache: "pip"
+
+      - name: Install coverage
+        # PEP 668 环境（ubuntu-latest 默认 PEP 668）需要 --break-system-packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install coverage --break-system-packages
+
+      - name: Show environment
+        run: |
+          python --version
+          coverage --version
+          echo "skill_root=$(pwd)"
+
+      - name: Run CI
+        # 默认 mode；workflow_dispatch 时用用户选的 mode
+        run: python ci/run_tests.py ${{ github.event.inputs.mode || '--full' }}
+        env:
+          # 强制 SKILL_ROOT 走 checkout 目录（避免路径不一致）
+          ARD_SKILL_ROOT: ${{ github.workspace }}
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload .coverage raw
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data
+          path: .coverage
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: ci/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Print coverage summary
+        if: success()
+        run: |
+          echo "### Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          python -m coverage report -m >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify action SHA pins (PR only)
+        # 只在 PR 跑：push 到 main 时 GitHub API rate limit 60/h 容易撞；
+        # PR 通常一次 1-2 个，rate limit 不会爆
+        # 脚本内已带 3 次指数退避重试，transient 错误（网络抖动 / 5xx / 429）
+        # 会自动 retry；只有持续失败才退出码=3 阻止 merge
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "### 🔒 Action SHA Pin Verification" >> $GITHUB_STEP_SUMMARY
+          # 校验所有 3 个 workflow 文件
+          any_transient=0
+          for wf in .github/workflows/ci.yml .github/workflows/nightly.yml .github/workflows/release.yml; do
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### \`$wf\`" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            # 捕获 rc（retry 不会影响传递）
+            python ci/verify_action_pin.py --workflow "$wf" --verbose --max-retries 3 --initial-backoff 1.0 \
+              >> $GITHUB_STEP_SUMMARY 2>&1
+            rc=$?
+            if [ $rc -eq 0 ]; then
+              echo "✅ $wf OK" >> $GITHUB_STEP_SUMMARY
+            elif [ $rc -eq 3 ]; then
+              echo "🔄 $wf TRANSIENT (3 次重试后仍失败 — 疑似网络问题)" >> $GITHUB_STEP_SUMMARY
+              echo "::warning::SHA pin check for $wf got transient errors after retries; check network / GitHub status"
+              any_transient=1
+            else
+              echo "❌ $wf FAILED (rc=$rc)" >> $GITHUB_STEP_SUMMARY
+              echo "::error::SHA pin verification failed for $wf (rc=$rc) — see step summary"
+              exit 1
+            fi
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          done
+          # 仅 1 个或多个 transient 失败时也 exit 1，触发 PR check 失败
+          # 防止网络问题误卡：可手动 re-run job 重试
+          if [ $any_transient -eq 1 ]; then
+            echo "::warning::At least one workflow had transient failures after retries. PR check is FAILED."
+            echo "ℹ️ This is likely a network issue, not a real SHA pin violation. Try /re-run jobs on this PR."
+            exit 1
+          fi
+
+      - name: CI failed
+        if: failure()
+        run: |
+          echo "::error::CI failed — see artifacts for logs"
+          echo "### ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+          echo "请下载 \`ci-logs\` artifact 查看详细日志。" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,143 @@
+name: Release
+
+# ============================================================
+# auto-research-driver Release workflow
+# ============================================================
+# 触发：
+#   - 推送 v*.*.* tag（如 v1.0.0, v1.1.0）
+#   - 手动 workflow_dispatch
+#
+# 流程：
+#   1. 跑全量 CI（quick → 必须 100% 通过才发布）
+#   2. 打包 skill 为 zip（git archive 风格）
+#   3. 创建 GitHub Release 并上传 zip
+#   4. 把 coverage HTML 作为单独的 artifact
+# ============================================================
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., 1.1.0)"
+        required: true
+        type: string
+      draft:
+        description: "Create as draft release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write  # 需要创建 release
+
+jobs:
+  validate:
+    name: Validate Before Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: Install coverage
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install coverage --break-system-packages
+
+      - name: Run quick CI (unit only)
+        id: check
+        # release 前必须 100% pass
+        run: |
+          set -e
+          python ci/run_tests.py --quick
+          echo "ok=true" >> $GITHUB_OUTPUT
+        env:
+          ARD_SKILL_ROOT: ${{ github.workspace }}
+
+  release:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.ok == 'true'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Build skill archive
+        run: |
+          # 排除 .git / __pycache__ / .coverage / htmlcov / ci/logs
+          tar --exclude='.git' \
+              --exclude='__pycache__' \
+              --exclude='*.pyc' \
+              --exclude='.coverage' \
+              --exclude='htmlcov' \
+              --exclude='ci/logs' \
+              --exclude='.pytest_cache' \
+              -czf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz" \
+              -C "${{ github.workspace }}" .
+
+      - name: List archive contents
+        run: tar -tzf "auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz" | head -30
+
+      - name: Create GitHub Release
+        # SHA-pinned 第三方 action（v2.3.2 = commit 72f2c25fcb47643c292f7107632f7a47c1df5cd8）
+        # 防 tag 被劫持 / maintainer 失信；升级时改 SHA 即可
+        # 验证：gh api repos/softprops/action-gh-release/git/refs/tags/v2.3.2 --jq '.object.sha'
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          name: "auto-research-driver v${{ steps.ver.outputs.version }}"
+          draft: ${{ github.event.inputs.draft || false }}
+          generate_release_notes: true
+          body: |
+            ## auto-research-driver v${{ steps.ver.outputs.version }}
+
+            TMLR 端到端 driver — 把 tmlr_pipeline + paper-reviewer-tmlr-corpus v2.4 + tmlr-review-simulator 串成端到端流水线。
+
+            ### 安装
+            ```bash
+            # 解压到 ~/.mavis/skills/auto-research-driver/
+            tar -xzf auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz -C ~/.mavis/skills/
+            ```
+
+            ### 跑测试
+            ```bash
+            py -3 ~/.mavis/skills/auto-research-driver/ci/run_tests.py --full
+            ```
+
+            ### 完整文档
+            - [SKILL.md](https://github.com/${{ github.repository }}/blob/v${{ steps.ver.outputs.version }}/SKILL.md)
+            - [references/README.md](https://github.com/${{ github.repository }}/blob/v${{ steps.ver.outputs.version }}/references/README.md)
+            - [ci/README.md](https://github.com/${{ github.repository }}/blob/v${{ steps.ver.outputs.version }}/ci/README.md)
+          files: |
+            auto-research-driver-v${{ steps.ver.outputs.version }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

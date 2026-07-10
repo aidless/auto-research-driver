@@ -1,0 +1,93 @@
+name: Nightly Regression
+
+# ============================================================
+# auto-research-driver 每周一定时回归测试
+# ============================================================
+# 触发：cron 每周一 02:00 UTC（北京时间 10:00）
+# 目的：
+#   - 防止 driver 依赖的外部组件（tmlr_pipeline / paper-reviewer-tmlr-corpus
+#     / tmlr-review-simulator）悄悄升级破坏 API
+#   - 长时间没人改的代码也跑一次，验证环境无漂移
+# ============================================================
+
+on:
+  schedule:
+    # 每周一 02:00 UTC
+    - cron: "0 2 * * 1"
+  workflow_dispatch:  # 也支持手动触发
+
+permissions:
+  contents: read
+  issues: write  # 创建 regression issue（仅在失败时）
+
+jobs:
+  regression:
+    name: Nightly Regression Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # nightly 比 main 新一点点，避免 race
+          ref: ${{ github.ref }}
+
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: Install coverage
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install coverage --break-system-packages
+
+      - name: Run full CI
+        run: python ci/run_tests.py --full
+        env:
+          ARD_SKILL_ROOT: ${{ github.workspace }}
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-coverage-html
+          path: htmlcov/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-ci-logs
+          path: ci/logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Nightly regression failed @ ' + new Date().toISOString().slice(0, 10),
+              body: [
+                'Nightly regression test failed.',
+                '',
+                '* Run: ' + context.runUrl,
+                '* Commit: ' + context.sha,
+                '',
+                '请检查 artifacts:',
+                '* `nightly-coverage-html`',
+                '* `nightly-ci-logs`',
+                '',
+                '可能原因：外部依赖（tmlr_pipeline / paper-reviewer-tmlr-corpus）升级破了 API；' +
+                '或者环境本身漂移。',
+              ].join('\n'),
+              labels: ['regression', 'nightly'],
+            });
