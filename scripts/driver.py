@@ -9,12 +9,35 @@
   driver reset --target-dir ...
   driver provider-check [--ping]
   driver checkpoints --target-dir ...
+  driver alarms --target-dir ... [--show-rules]
+  driver scan-alarms [--root F:\\Research] [--stale-days 30] [--quiet]
 
 设计：driver 是 stateful 的薄壳。所有"做什么"由 lib/wrappers.py 调用既有组件。
 driver 只负责：(1) provider sanity，(2) state.json 持久化，(3) checkpoint 闸门，
 (4) 失败时回滚到上一个 safe stage。
 
 不在这里实现真正的 TMLR 流水线逻辑——那是 tmlr_pipeline.run_pipeline.py 的事。
+
+子命令清单（与 bin/driver.cmd 同步）：
+  run              跑流水线主入口（cmd_run）
+  status           看 state.json + pending checkpoints（cmd_status）
+  reset            清掉 state.json（cmd_reset）
+  sign             签一个 checkpoint（cmd_sign）
+  checkpoints      列所有 checkpoint 规格（cmd_checkpoints）
+  alarms           列 budget 报警 + rerun 历史（cmd_alarms, 2026-07-10 增）
+  scan-alarms      跨多 paper 报警扫描（cmd_scan_alarms, 2026-07-10 增）
+  provider-check   验证 MiniMax provider 配置（cmd_provider_check）
+
+调度模型：
+- driver run 是 sequential 的（按 STAGES_ORDER 顺序跑，每个完成才进下一个）
+- checkpoint 是 blocking 的（默认未签字就 pause，--skip-checkpoints 跳过）
+- 失败时 pause（return 非零），但 state.run_count 持续累加
+- 用户用 driver sign 签字后，再用 driver run 续跑（从 checkpoint stage 重启）
+
+不在这里实现：
+- idea brainstorm / evaluator（v1.1+ 才接）
+- deep_read / paper-reviewer 自动化（v1.1+ 才接）
+- TMLR submission 真投递（S6 只生成 checklist，不真投递）
 """
 from __future__ import annotations
 
@@ -43,12 +66,20 @@ from lib import wrappers as W
 
 
 def cmd_provider_check(args) -> int:
-    """子命�? provider-check [--ping]"""
+    """子命令: provider-check [--ping]
+
+    验证 MiniMax provider 配置（config.yaml + API key）。
+    默认是 dry-run（只检查 key 格式），加 --ping 才会真打网关。
+    """
     return provider_check.check_provider(args.config, do_ping=args.ping)
 
 
 def cmd_status(args) -> int:
-    """子命令: status --target-dir ..."""
+    """子命令: status --target-dir ...
+
+    打印 state.json 的关键字段 + 列出 pending checkpoint + 报警 + rerun 历史。
+    只读，不修改 state。
+    """
     from state import list_alarms, get_stage_reruns
     s = load_state(args.target_dir)
     print(f"target      : {args.target_dir}")
@@ -87,7 +118,10 @@ def cmd_status(args) -> int:
 
 
 def cmd_reset(args) -> int:
-    """子命令: reset --target-dir ..."""
+    """子命令: reset --target-dir ...
+
+    删除 state.json（重新初始化时用）。不删 .driver/ 目录。
+    """
     p = state_path(args.target_dir)
     if p.exists():
         p.unlink()
@@ -98,14 +132,22 @@ def cmd_reset(args) -> int:
 
 
 def cmd_sign(args) -> int:
-    """子命令: sign --target-dir ... --checkpoint <stage> [--note ...]"""
+    """子命令: sign --target-dir ... --checkpoint <stage> [--note ...]
+
+    用户对一个 checkpoint 签字（确认 stage 输出满意）。
+    签字后 driver run 才允许从下一 stage 续跑。
+    """
     s = load_state(args.target_dir)
     sign(s, args.checkpoint, args.target_dir, note=args.note or "")
     return 0
 
 
 def cmd_checkpoints(args) -> int:
-    """子命令: checkpoints --target-dir ... 列出所有 checkpoint 规格。"""
+    """子命令: checkpoints --target-dir ... 列出所有 checkpoint 规格。
+
+    显示 CHECKPOINT_PLAN（来自 checkpoints.py）的所有 stage + kind + title + prompt。
+    用于人工查看 driver 的 gate 策略。
+    """
     for stage, spec in CHECKPOINT_PLAN.items():
         print(f"\n[{spec.kind:8s}] {stage}: {spec.title}")
         print(f"  prompt : {spec.prompt}")
@@ -187,6 +229,10 @@ def cmd_run(args) -> int:
     4. 每个 stage 完成 → mark_completed + save_state
     5. 每个 stage 完成 → 检查 checkpoint（如未签字，pause）
     6. 失败 → mark_failed + save_state（run_count +1）
+
+    Returns:
+        0 = 正常完成或 pause（不是失败，pause 是 waiting for user signature）
+        非 0 = 失败（provider check / stage rc != 0 / 参数错）
     """
     # 1. provider sanity
     if not args.skip_provider_check:
@@ -269,7 +315,17 @@ def cmd_run(args) -> int:
 
 
 def _run_stage(stage: str, target: Path, args, state: DriverState) -> int:
-    """单个 stage 的执行。返回 subprocess rc。"""
+    """stage 字符串 → 调对应 _stage_sN_* 实现。
+
+    Args:
+        stage: stage 名（"s1_idea" 等）
+        target: paper 工程目录
+        args: cmd_run 收到的 argparse.Namespace
+        state: 当前 DriverState（被 stage 内部直接修改 + save_state）
+
+    Returns:
+        subprocess rc：0 = 成功，非 0 = 失败
+    """
     if stage == "s1_idea":
         return _stage_s1_idea(target, args, state)
     elif stage == "s2_lit":
@@ -293,6 +349,14 @@ def _stage_s1_idea(target: Path, args, state: DriverState) -> int:
     当前策略：把 idea_source 写到 target/idea_canvas.md，让人工 / 后续 LLM 填充。
     完整 automation 需要 brainstorming-research + idea-evaluator + research_radar_v2，
     那部分 v1.1 再说；v1.0 先骨架。
+
+    三种 idea 来源：
+    - "idea"     用户 --idea 传入的一句话
+    - "arxiv"    用户 --arxiv 传入的 arxiv id
+    - "auto"     用户 --idea-auto 标记（obsidian 14 tag + research_radar v1.1 接入）
+    - None       resume mode（state 已有 idea_source）；生成 placeholder
+
+    副作用：state.artifacts["idea_canvas"] = <绝对路径>
     """
     canvas = target / "idea_canvas.md"
     src = state.artifacts.get("idea_source")
@@ -331,6 +395,8 @@ def _stage_s2_lit(target: Path, args, state: DriverState) -> int:
     v1.0 占位：只生成 refs.bib 模板 + lit_review.md 模板。
     完整 automation（deep_read_v2 + light-literature-search + paper-reviewer cite_verify）
     v1.1 接入。
+
+    副作用：state.artifacts["refs_bib"] + state.artifacts["lit_review"] 写入
     """
     refs = target / "refs.bib"
     review = target / "lit_review.md"
@@ -350,7 +416,12 @@ def _stage_s2_lit(target: Path, args, state: DriverState) -> int:
 
 
 def _stage_s3_outline(target: Path, args, state: DriverState) -> int:
-    """S3: outline + experiment design 模板。"""
+    """S3: outline + experiment design 模板。
+
+    生成 8 章 outline + experiment design 模板，v1.1 接入 tmlr_pipeline.templates。
+
+    副作用：state.artifacts["outline"] + state.artifacts["experiment_design"] 写入
+    """
     outline = target / "outline.md"
     design = target / "experiment_design.md"
     if not outline.exists():
@@ -372,6 +443,14 @@ def _stage_s4_draft(target: Path, args, state: DriverState) -> int:
     """S4: draft。
 
     如果 target 已有 main.tex，跳过（避免覆盖）；否则从 tmlr_pipeline 模板复制。
+
+    Args:
+        target: paper 工程目录
+        args: cmd_run Namespace；args.force=true 强制覆盖
+        state: 当前 DriverState
+
+    Returns:
+        0 = 成功（无论覆盖或跳过）；非 0 = subprocess 失败
     """
     if (target / "main.tex").exists() and not args.force:
         print(f"  [s4] main.tex exists; skip (use --force to overwrite)")
@@ -387,6 +466,14 @@ def _stage_s5_review(target: Path, args, state: DriverState) -> int:
     review_mode 默认 'simulator'（v1.0 走 tmlr-review-simulator，因为 v2.4 多 paper
     dispatch 在 driver 这种单 paper 场景需要额外配置）。--review-mode v24 走
     paper-reviewer-tmlr-corpus 4 persona（v1.1 接入）。
+
+    Args:
+        target: paper 工程目录（须有 main.tex 或 main.pdf）
+        args: cmd_run Namespace；args.review_mode ∈ {"simulator", "v24"}
+        state: DriverState，v2.4 模式下 state.scores["v24_final"] 会被填
+
+    Returns:
+        subprocess rc：0 = 成功；非 0 = 找不到 paper / 模拟器失败
     """
     paper = W.find_main_tex(target) or W.find_main_pdf(target)
     if paper is None:
@@ -414,7 +501,18 @@ def _stage_s5_review(target: Path, args, state: DriverState) -> int:
 
 
 def _parse_v24_score(target: Path, paper_name: str) -> Optional[float]:
-    """从 v2.4 报告里解析 v24_final。"""
+    """从 v2.4 报告里解析 v24_final。
+
+    路径约定：F:/Research/_paper_reviews/baseline/reviews/p{n}_review_rev{N}.md
+    取最新 rev 报告（lexicographic max），从中正则抓分数。
+
+    Args:
+        target: paper 工程目录（本函数不用，但保留以备扩展）
+        paper_name: paper 名（用于 glob pattern）
+
+    Returns:
+        分数 float（0-10），或 None（找不到 / 解析失败）
+    """
     # v2.4 报告路径约定：F:/Research/_paper_reviews/baseline/reviews/p{n}_review_rev{N}.md
     review_dir = Path(r"F:\Research\_paper_reviews\baseline\reviews")
     if not review_dir.exists():
@@ -434,7 +532,13 @@ def _parse_v24_score(target: Path, paper_name: str) -> Optional[float]:
 
 
 def _stage_s6_submit(target: Path, args, state: DriverState) -> int:
-    """S6: submit checklist。"""
+    """S6: submit checklist。
+
+    生成 submission checklist 模板（v1.1 接入 tmlr_pipeline.templates）。
+    S6 是"决策点"：用户最终签字才会真投递。
+
+    副作用：state.artifacts["submit_checklist"] 写入
+    """
     p = target / "submit"
     p.mkdir(parents=True, exist_ok=True)
     checklist = p / "checklist.md"
@@ -450,6 +554,19 @@ def _stage_s6_submit(target: Path, args, state: DriverState) -> int:
 
 
 def main() -> int:
+    """CLI 入口：注册 8 个子命令并 dispatch。
+
+    用法：
+        driver run --target-dir F:/Research/paper_x
+        driver status --target-dir F:/Research/paper_x
+        driver alarms --target-dir F:/Research/paper_x --show-rules
+        driver scan-alarms --root F:/Research --quiet
+        ...
+
+    Returns:
+        args.func(args) 的返回值（0 = 成功，非 0 = 失败）。
+        实际 exit code 由 sys.exit 传给 shell。
+    """
     ap = argparse.ArgumentParser(
         prog="driver",
         description="auto-research-driver — TMLR end-to-end pipeline driver",
