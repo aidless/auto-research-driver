@@ -106,18 +106,22 @@ jobs:
           echo "=== Done ==="
 
       # ---------- 4. 跑 scan_alarms.py（JSON + Markdown 双输出） ----------
+      # 关键：不能用 set -e!scan_alarms.py 故意在有 critical alarm 时 exit 2（设计语义），
+      # set -e 会让 shell 在 exit 2 时立刻终止，根本走不到下面的 if 判断。
+      # 这里用 `|| SCAN_RC=$?` 捕获真实退出码。
       - name: Run scan_alarms (json + md)
         id: scan
         run: |
-          set -e
+          set +e  # 显式关闭 errexit，确保 scan_alarms exit 2 不终止整个 step
           python3 scripts/scan_alarms.py \
             --root /tmp/papers \
             --output-dir /tmp/alarms \
             --stale-days 30
           SCAN_RC=$?
+          set -e
           echo "scan_rc=$SCAN_RC"
-          # 注意: rc=2 (有 critical) 是预期行为,不能 set -e
-          if [ $SCAN_RC -ne 2 ] && [ $SCAN_RC -ne 0 ]; then
+          # rc=0 (clean) 或 rc=2 (有 critical) 都是预期
+          if [ $SCAN_RC -ne 0 ] && [ $SCAN_RC -ne 2 ]; then
             echo "::error::unexpected exit code $SCAN_RC (expected 0 or 2)"
             exit 1
           fi
