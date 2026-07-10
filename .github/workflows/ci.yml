@@ -77,6 +77,12 @@ jobs:
         env:
           # 强制 SKILL_ROOT 走 checkout 目录（避免路径不一致）
           ARD_SKILL_ROOT: ${{ github.workspace }}
+          # 强制 UTF-8 stdout/stderr (防 Windows-like GBK 编码错；
+          # ubuntu runner 默认是 UTF-8，但加 explicit 更稳)
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: "1"
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
 
       - name: Upload coverage HTML
         if: always()

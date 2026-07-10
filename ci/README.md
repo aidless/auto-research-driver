@@ -1,6 +1,13 @@
 # auto-research-driver CI 一键复现脚本
 
-本目录提供 1 个 CI 入口脚本（Python 实现），统一封装以下流程：
+本目录提供 2 个 CI 入口脚本，统一封装以下流程：
+
+- `run_tests.py` — Windows / Linux 本地一键复现 9 个 step（unit + coverage + smoke）
+- `ci_test_ubuntu.sh` — **Docker 模拟 GitHub Actions ubuntu runner**（python:3.12-slim 镜像）
+  - 用法：`./ci/ci_test_ubuntu.sh` 或 `bash ci/ci_test_ubuntu.sh`
+  - 镜像内执行 `python3 ci/run_tests.py` 复现 CI 行为
+  - 需要 Docker Desktop 已启动
+  - 失败时可本地重现 GitHub Actions 报错，不用反复 push + 等 CI
 
 1. **preflight** — 校验 Python 路径 + 测试文件存在
 2. **ensure coverage** — 检测 `coverage` 是否安装，缺失则自动 `pip install coverage --break-system-packages`

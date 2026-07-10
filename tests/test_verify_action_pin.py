@@ -13,9 +13,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import os
 import sys
 import tempfile
 import textwrap
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 from urllib.error import HTTPError, URLError
@@ -210,9 +213,12 @@ def test_retry_transient_recovers():
 
     import time
     start = time.time()
-    ok, result = verify_pin.call_with_retry(
-        fn, max_retries=3, initial_backoff=0.05, backoff_factor=2.0, label="test"
-    )
+    # force non-CI path so ::warning:: 不被 GitHub Actions 当 annotation
+    with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+         redirect_stderr(io.StringIO()) as buf:
+        ok, result = verify_pin.call_with_retry(
+            fn, max_retries=3, initial_backoff=0.05, backoff_factor=2.0, label="test"
+        )
     elapsed = time.time() - start
 
     assert ok is True
@@ -221,6 +227,9 @@ def test_retry_transient_recovers():
     # 容差放宽：CI runner 上 time.sleep 不一定精确，0.04 太严苛
     # 0.02 下限（确保至少等过 1 次 backoff）+ 1.0 上限（容忍慢 runner）
     assert 0.02 < elapsed < 1.0
+    # 验证 stderr 没有 ::warning:: 泄漏
+    assert "::warning::" not in buf.getvalue(), \
+        f"non-CI path should not emit ::warning::, got: {buf.getvalue()!r}"
     _record("重试: transient 503 在第 2 次成功后停止", True)
 
 
@@ -232,9 +241,11 @@ def test_retry_404_no_retry():
         attempts[0] += 1
         raise Fake404()
 
-    ok, result = verify_pin.call_with_retry(
-        fn, max_retries=5, initial_backoff=0.05, backoff_factor=2.0, label="test"
-    )
+    with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+         redirect_stderr(io.StringIO()):
+        ok, result = verify_pin.call_with_retry(
+            fn, max_retries=5, initial_backoff=0.05, backoff_factor=2.0, label="test"
+        )
 
     assert ok is False
     assert isinstance(result, Fake404)
@@ -252,11 +263,15 @@ def test_retry_urlerror_retried():
             raise URLError("getaddrinfo failed")
         return "ok"
 
-    ok, result = verify_pin.call_with_retry(
-        fn, max_retries=3, initial_backoff=0.05, backoff_factor=2.0, label="test"
-    )
+    with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+         redirect_stderr(io.StringIO()) as buf:
+        ok, result = verify_pin.call_with_retry(
+            fn, max_retries=3, initial_backoff=0.05, backoff_factor=2.0, label="test"
+        )
     assert ok is True
     assert attempts[0] == 2
+    assert "::warning::" not in buf.getvalue(), \
+        f"non-CI path should not emit ::warning::, got: {buf.getvalue()!r}"
     _record("重试: URLError 被识别为 transient", True)
 
 
@@ -268,12 +283,16 @@ def test_retry_exhaustion_returns_false():
         attempts[0] += 1
         raise Fake503()
 
-    ok, result = verify_pin.call_with_retry(
-        fn, max_retries=3, initial_backoff=0.01, backoff_factor=2.0, label="test"
-    )
+    with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+         redirect_stderr(io.StringIO()) as buf:
+        ok, result = verify_pin.call_with_retry(
+            fn, max_retries=3, initial_backoff=0.01, backoff_factor=2.0, label="test"
+        )
     assert ok is False
     assert isinstance(result, Fake503)
     assert attempts[0] == 3
+    assert "::warning::" not in buf.getvalue(), \
+        f"non-CI path should not emit ::warning::, got: {buf.getvalue()!r}"
     _record("重试: 持续 transient 达到 max_retries 后放弃", True)
 
 
@@ -287,9 +306,11 @@ def test_retry_exponential_backoff_timing():
         raise Fake503()
 
     start = time.time()
-    verify_pin.call_with_retry(
-        fn, max_retries=3, initial_backoff=0.1, backoff_factor=2.0, label="test"
-    )
+    with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+         redirect_stderr(io.StringIO()):
+        verify_pin.call_with_retry(
+            fn, max_retries=3, initial_backoff=0.1, backoff_factor=2.0, label="test"
+        )
     elapsed = time.time() - start
 
     # 预期：0.1s + 0.2s = 0.3s
