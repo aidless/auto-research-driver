@@ -61,12 +61,22 @@ jobs:
       - name: Run quick CI (unit only)
         id: check
         # release 前必须 100% pass
+        # 2026-07-10: 加 tee ci_run.log + artifact upload,失败时可下载诊断
         run: |
           set -e
-          python ci/run_tests.py --quick
+          python ci/run_tests.py --quick 2>&1 | tee ci_run.log
           echo "ok=true" >> $GITHUB_OUTPUT
         env:
           ARD_SKILL_ROOT: ${{ github.workspace }}
+
+      - name: Upload ci_run.log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-ci-run-log
+          path: ci_run.log
+          retention-days: 14
+          if-no-files-found: warn
 
   release:
     name: Build & Publish
