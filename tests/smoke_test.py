@@ -23,11 +23,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DRIVER_PY = HERE.parent / "scripts" / "driver.py"
-PY = "py"
+# 用 sys.executable 而不是 "py"：
+# - Windows 上 "py -3" 也行（Python Launcher），但只 Windows 有
+# - Linux/macOS GitHub runner 上 "py" 不存在，会立刻 FileNotFoundError
+# - sys.executable 是当前解释器绝对路径，跨平台一致
+PY = sys.executable
 
 
 def _run(args: list, cwd=None) -> tuple[int, str]:
-    cmd = [PY, "-3", str(DRIVER_PY)] + args
+    # 不再带 "-3"（当前解释器就是 3.x，不需要版本选择）
+    cmd = [PY, str(DRIVER_PY)] + args
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
