@@ -95,7 +95,7 @@ jobs:
         # 即使 Run CI 失败也上传 — 这是核心 debug artifact。
         # 配合 log 分析就能拿到 Run CI step 的完整 stdout。
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ci-run-log
           path: ci_run.log
@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload coverage HTML
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-html
           path: htmlcov/
@@ -113,7 +113,7 @@ jobs:
 
       - name: Upload .coverage raw
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-data
           path: .coverage
@@ -122,7 +122,7 @@ jobs:
 
       - name: Upload CI logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ci-logs
           path: ci/logs/
