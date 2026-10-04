@@ -115,7 +115,7 @@ jobs:
         # SHA-pinned 第三方 action（v2.3.2 = commit 72f2c25fcb47643c292f7107632f7a47c1df5cd8）
         # 防 tag 被劫持 / maintainer 失信；升级时改 SHA 即可
         # 验证：gh api repos/softprops/action-gh-release/git/refs/tags/v2.3.2 --jq '.object.sha'
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: "auto-research-driver v${{ steps.ver.outputs.version }}"
           draft: ${{ github.event.inputs.draft || false }}
