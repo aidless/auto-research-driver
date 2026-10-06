@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # nightly 比 main 新一点点，避免 race
           ref: ${{ github.ref }}
