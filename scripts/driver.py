@@ -640,7 +640,12 @@ def main() -> int:
     p_pc.add_argument("--ping", action="store_true", help="真 ping 网关")
     p_pc.set_defaults(func=cmd_provider_check)
 
-    args = ap.parse_args()
+    try:
+        args = ap.parse_args()
+    except SystemExit as e:
+        # argparse 用 SystemExit 表达 --help(0)/参数错误(2)；转成返回码，
+        # CLI 行为不变（__main__ 里 sys.exit(main())），且可被测试调用。
+        return e.code if isinstance(e.code, int) else 2
     return args.func(args)
 
 
