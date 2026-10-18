@@ -1,20 +1,26 @@
 name: Nightly Regression
 
 # ============================================================
-# auto-research-driver 每周一定时回归测试
+# auto-research-driver 回归测试（现在仅手动触发）
 # ============================================================
-# 触发：cron 每周一 02:00 UTC（北京时间 10:00）
-# 目的：
+# 历史（如实记录，勿删）：
+#   本 workflow 原先由 cron 每周一 02:00 UTC 调度。2026-07-13 → 2026-09-14 的
+#   10 次 scheduled 运行**全部失败**（每次自动开出 issue #1–#10），随后被 GitHub
+#   按「仓库长期无活动自动停用定时工作流」停用（state = disabled_inactivity）。
+#   按本仓既有做法（长期失败的定时器直接移除，而不是留一个永远红的定时任务），
+#   2026-10-17 删掉 schedule 触发器，只保留手动 workflow_dispatch。
+# 根因未在本轮定位：同一条命令 `ci/run_tests.py --full` 目前由 ci.yml 在每次
+#   push 上运行且为绿（2026-10-17 09:44），因此这道定时任务今天不提供额外覆盖。
+#   若要恢复定时，请先把那 10 次失败根因化，再决定是否加回 schedule。
+# 目的（保留）：
 #   - 防止 driver 依赖的外部组件（tmlr_pipeline / paper-reviewer-tmlr-corpus
 #     / tmlr-review-simulator）悄悄升级破坏 API
 #   - 长时间没人改的代码也跑一次，验证环境无漂移
+# 失败时仍会自动创建 issue（标签 regression + nightly）。
 # ============================================================
 
 on:
-  schedule:
-    # 每周一 02:00 UTC
-    - cron: "0 2 * * 1"
-  workflow_dispatch:  # 也支持手动触发
+  workflow_dispatch:  # 仅手动触发（schedule 已于 2026-10-17 移除）
 
 permissions:
   contents: read

@@ -5,7 +5,7 @@
 | Workflow | 触发 | 用途 | Runner | 频率 |
 |----------|------|------|--------|------|
 | `ci.yml` | push / PR / manual | **主 CI** — 跑单元 + 集成 + coverage + HTML | ubuntu | 每次 commit |
-| `nightly.yml` | cron 每周一 02:00 UTC / manual | **回归测试** — 防止外部依赖升级破坏 | ubuntu | 每周 1 次 |
+| `nightly.yml` | manual only（schedule 已于 2026-10-17 移除） | **回归测试** — 防止外部依赖升级破坏 | ubuntu | 手动 |
 | `release.yml` | push `v*.*.*` tag / manual | **发布** — 跑 quick test + 打包 + GitHub Release | ubuntu | 手动 / tag 触发 |
 | `scan_alarms.yml` | push / PR / manual | **scan_alarms.py smoke** — 跨多 paper 报警扫描 + 6 个断言 | ubuntu | 每次 commit |
 | `driver-windows-smoke.yml` | manual only | **driver.cmd Windows smoke** — 验证 Windows shim 在 windows-latest 上跑通 | **windows** | 手动 |
@@ -85,11 +85,16 @@ python ci/run_tests.py --full
   - 调 `ci/verify_action_pin.py` 校验 3 个 workflow 的所有 `uses:`
   - 失败 → `::error::` annotation + step summary 显示 ❌ + exit 1
 
-### `nightly.yml` — 每周一回归
+### `nightly.yml` — 回归测试（仅手动）
 
 **触发条件**：
-- cron `0 2 * * 1`（UTC 02:00 = 北京 10:00 每周一）
-- 手动 `workflow_dispatch`
+- 仅手动 `workflow_dispatch`
+
+> **schedule 已于 2026-10-17 移除**：原先的 cron `0 2 * * 1` 在 2026-07-13 →
+> 2026-09-14 连续 10 次 scheduled 运行**全部失败**（每次自动开出 issue #1–#10），
+> 随后被 GitHub 按 inactivity 停用该定时工作流。同一条 `ci/run_tests.py --full`
+> 现由 `ci.yml` 在每次 push 上运行且为绿，故定时副本不再提供额外覆盖；恢复定时前
+> 需先把那 10 次失败根因化。详见 `nightly.yml` 文件头注释。
 
 **关键设计**：
 - 失败时自动创建 GitHub issue（标签 `regression` + `nightly`）

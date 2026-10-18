@@ -16,7 +16,7 @@ thresholds.
 | Path | Contents |
 |---|---|
 | [SKILL.md](SKILL.md) | the orchestration definition (stages, gates, alerts) |
-| `.github/workflows/` | CI, nightly runs, release, and the scan-alarm workflow |
+| `.github/workflows/` | CI, the manual regression run, release, and the scan-alarm workflow |
 
 The repository description records the last self-test result; check the workflows for
 the current one rather than trusting a number in the description.
