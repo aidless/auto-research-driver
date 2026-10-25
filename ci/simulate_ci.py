@@ -6,19 +6,20 @@
 3. install coverage（PEP 668）
 4. run ci/run_tests.py --full
 5. 把 coverage report 渲染成 Markdown 表格，写到 GITHUB_STEP_SUMMARY
-6. 上传 artifacts（落到本地 F:\Temp\gh_artifacts\）
+6. 上传 artifacts（落到本地临时目录，见 GH_ARTIFACTS_DIR）
 
 不做的事（GH Actions 才能做）：
 - 真的创建 release / tag
-- 真的上传到 GH artifacts 服务（本地直接落到 F:\Temp\gh_artifacts\）
+- 真的上传到 GH artifacts 服务（本地直接落到 artifacts 目录）
 - concurrency 取消（同进程串行）
 
 用法：
     py -3 ci/simulate_ci.py
 
 环境变量覆盖：
-    ARD_SKILL_ROOT       skill 根目录（默认：C:\Users\Administrator\.mavis\skills\auto-research-driver）
-    GH_ARTIFACTS_DIR     artifact 输出目录（默认：F:\Temp\gh_artifacts）
+    ARD_SKILL_ROOT       skill 根目录（默认：仓库根，即本文件的上两级）
+    ARD_PYTHON           使用的解释器（默认：当前运行的 python）
+    GH_ARTIFACTS_DIR     artifact 输出目录（默认：<系统临时目录>/gh_artifacts）
     CI_MODE              full / quick / default / html-only（默认：full）
 """
 from __future__ import annotations
@@ -27,13 +28,14 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 # Skill 根目录
-SKILL_ROOT = Path(os.environ.get("ARD_SKILL_ROOT", r"C:\Users\Administrator\.mavis\skills\auto-research-driver"))
-PY = Path(r"C:\Users\Administrator\AppData\Roaming\uv\python\cpython-3.9.25-windows-x86_64-none\python.exe")
-ARTIFACT_DIR = Path(os.environ.get("GH_ARTIFACTS_DIR", r"F:\Temp\gh_artifacts"))
+SKILL_ROOT = Path(os.environ.get("ARD_SKILL_ROOT", Path(__file__).resolve().parents[1]))
+PY = Path(os.environ.get("ARD_PYTHON") or sys.executable)
+ARTIFACT_DIR = Path(os.environ.get("GH_ARTIFACTS_DIR", Path(tempfile.gettempdir()) / "gh_artifacts"))
 CI_MODE = os.environ.get("CI_MODE", "full")
 
 # 模拟 GH Actions 环境变量
