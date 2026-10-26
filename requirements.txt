@@ -1,0 +1,7 @@
+# aidless/auto-research-driver — optional dependencies only
+#
+# All third-party imports in this repo sit inside try/except ImportError guards or
+# function bodies, i.e. the code runs without them. Uncomment what you need.
+
+# coverage  # ci/run_tests.py:183
+# PyYAML  # scripts/provider_check.py:23
