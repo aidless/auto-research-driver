@@ -81,6 +81,17 @@ def test_load_minimax_config_missing():
 
 def test_load_minimax_config_yaml():
     """PyYAML 可用时 → 正确 parse 出 provider.minimax.apiKey。"""
+    # PyYAML is an optional dependency (requirements.txt leaves it commented out),
+    # so a runner without it legitimately falls back to the regex path. That is
+    # covered by test_load_minimax_config_regex_fallback below; asserting the
+    # YAML path in an environment that has no YAML parser is a false failure.
+    if provider_check.yaml is None:
+        try:
+            import pytest
+        except ImportError:  # script mode: `py -3 tests/test_provider_check.py`
+            print("SKIP: test_load_minimax_config_yaml (PyYAML not installed)")
+            return
+        pytest.skip("PyYAML not installed; regex fallback is covered separately")
     yaml_text = (
         "provider:\n"
         "  minimax:\n"

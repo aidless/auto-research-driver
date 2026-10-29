@@ -13,5 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install pytest
+      # PyYAML is optional at runtime, but the suite has a test for the YAML
+      # parsing path; install it so that path is exercised rather than skipped.
+      - run: python -m pip install pytest pyyaml
       - run: python -m pytest tests -q
