@@ -2,6 +2,8 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> 🗂 **仓库族谱**：「自主研究循环」主线仓是 [ai-researcher](https://github.com/aidless/ai-researcher)；本仓定位是 TMLR 端到端 driver 层（agent skill，串 tmlr_pipeline / paper-writing-agent 等 5 个子系统）。
+
 An orchestration skill that drives the stages of a TMLR paper from S1 to S6, with
 budget alerts so a run stops before it spends more than intended.
 
