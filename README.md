@@ -1,5 +1,7 @@
 # auto-research-driver
 
+> **English TL;DR**: An orchestration skill that drives a TMLR paper through six gated stages (S1–S6) with explicit human decision/confirmation checkpoints. The offline CLI, checkpoint specs and provider check were executed locally for this pass; the full pipeline was **NOT YET MEASURED** here because it needs external workspaces and a configured provider.
+
 [![CI](https://github.com/aidless/auto-research-driver/actions/workflows/ci.yml/badge.svg)](https://github.com/aidless/auto-research-driver/actions/workflows/ci.yml)
 [![checks](https://github.com/aidless/auto-research-driver/actions/workflows/checks.yml/badge.svg)](https://github.com/aidless/auto-research-driver/actions/workflows/checks.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -68,3 +70,46 @@ the current one rather than trusting a number in the description.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## U1 live recompute (executed 2026-11-11)
+
+The S1–S6 table above is a **specification** of checkpoints, not measured
+results. The table below records what was actually executed in this pass.
+
+| Live check | Value | Source |
+|---|---|---|
+| `driver.py --help` subcommands | 8 (`run`, `status`, `reset`, `sign`, `checkpoints`, `alarms`, `scan-alarms`, `provider-check`) | live `python3 scripts/driver.py --help` (exit 0) |
+| `driver.py checkpoints` entries | 6 (S1–S6) | live `python3 scripts/driver.py checkpoints` (exit 0) |
+| `provider_check.py` | `FAIL: config.yaml 没有 provider.minimax 段` | live exit 1: `FAIL: config.yaml 没有 provider.minimax 段（/home/liuzewen/.mavis/config.yaml）` |
+
+Checkpoint specs as printed live:
+
+| Checkpoint | Type | Decision / confirmation point |
+|---|---|---|
+| `s1_idea` | decision | S1 决策点：idea 拍板 |
+| `s2_lit` | confirm  | S2 确认点：refs.bib 校验通过 |
+| `s3_outline` | decision | S3 决策点：outline + 实验设计拍板 |
+| `s4_draft` | confirm  | S4 确认点：每章完成后过一遍 |
+| `s5_review` | confirm  | S5 质量门：v2.4 ≥ 7.8 才能进 S6 |
+| `s6_submit` | decision | S6 决策点：用户最终签字（机器不能替代） |
+
+Historical test report (committed, not re-run in this pass):
+
+| Metric | Value | Source (path:line) |
+|---|---|---|
+| Unit tests | `单元测试通过率  22/22 PASS (100%)  100%  ✅` | `reports/TEST_REPORT_2026-07-10.md:14` |
+| Integration smoke | `集成 smoke  7/7 步 PASS  全部通过  ✅` | `reports/TEST_REPORT_2026-07-10.md:16` |
+
+**NOT YET MEASURED**: an end-to-end S1→S6 run. The driver needs the
+`SKILL.md` dependency workspaces and a working MiniMax provider; the live
+provider check above fails honestly, so no stage result is claimed.
+
+Quickstart commands actually executed for this pass:
+
+```bash
+python3 scripts/driver.py --help        # exit 0, 8 subcommands
+python3 scripts/driver.py checkpoints  # exit 0, 6 checkpoints
+python3 scripts/provider_check.py      # exit 1 (missing provider.minimax config)
+```
+
+<!-- figure: pending real measurement -->
