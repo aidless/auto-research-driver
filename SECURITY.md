@@ -29,3 +29,4 @@ is maintained for reporters throughout.
 
 This repository is source code and documentation. Reports about dependencies with a published CVE
 are welcome and will be tracked; issues in upstream services are out of scope.
+Release 资产用此密钥（SIGNING_KEY.asc）签名，验证命令 `gpg --verify <asset>.asc <asset>`。
