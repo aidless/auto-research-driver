@@ -1,0 +1,129 @@
+{
+ "total": 20,
+ "passed": 20,
+ "failed": 0,
+ "selftest": false,
+ "failed_by_axis": {},
+ "results": [
+  {
+   "id": "ST-01",
+   "axis": "state/schema",
+   "ok": true,
+   "detail": "6"
+  },
+  {
+   "id": "ST-02",
+   "axis": "state/schema",
+   "ok": true,
+   "detail": "s6_submit"
+  },
+  {
+   "id": "ST-03",
+   "axis": "state/schema",
+   "ok": true,
+   "detail": "raised TypeError"
+  },
+  {
+   "id": "SP-01",
+   "axis": "state/persist",
+   "ok": true,
+   "detail": "s1_idea"
+  },
+  {
+   "id": "SP-02",
+   "axis": "state/persist",
+   "ok": true,
+   "detail": "corrupt"
+  },
+  {
+   "id": "SP-03",
+   "axis": "state/persist",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "id": "CG-01",
+   "axis": "checkpoints/gate",
+   "ok": true,
+   "detail": "3"
+  },
+  {
+   "id": "CG-02",
+   "axis": "checkpoints/gate",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "id": "CG-03",
+   "axis": "checkpoints/gate",
+   "ok": true,
+   "detail": "6"
+  },
+  {
+   "id": "BG-01",
+   "axis": "budget/alarm",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "id": "BG-02",
+   "axis": "budget/alarm",
+   "ok": true,
+   "detail": "1"
+  },
+  {
+   "id": "BG-03",
+   "axis": "budget/alarm",
+   "ok": true,
+   "detail": "raised KeyError"
+  },
+  {
+   "id": "PK-01",
+   "axis": "provider/key",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "id": "PK-02",
+   "axis": "provider/key",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "id": "SC-01",
+   "axis": "scan/detect",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "id": "SC-02",
+   "axis": "scan/detect",
+   "ok": true,
+   "detail": "1"
+  },
+  {
+   "id": "WP-01",
+   "axis": "wrappers/paths",
+   "ok": true,
+   "detail": "paper5_consolidated"
+  },
+  {
+   "id": "CL-01",
+   "axis": "driver/cli",
+   "ok": true,
+   "detail": "30"
+  },
+  {
+   "id": "DC-01",
+   "axis": "docs/spec",
+   "ok": true,
+   "detail": "quality gate of v2.4 ≥ 7.8"
+  },
+  {
+   "id": "DC-02",
+   "axis": "docs/spec",
+   "ok": true,
+   "detail": "S1=2, S2=3, S3=2, S4=3, S5=4, S6=1"
+  }
+ ]
+}

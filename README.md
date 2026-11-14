@@ -230,3 +230,29 @@ python3 scripts/provider_check.py      # exit 1 (missing provider.minimax config
 ```
 
 <!-- figure: pending real measurement -->
+
+## 验收题库与复算
+
+`eval/cases.jsonl` 是 **20 条（n=20）** 可执行验收题，覆盖九个口径：`state/schema`
+（stage 顺序与推进）、`state/persist`（首次加载 / 损坏恢复 / 原子写）、
+`checkpoints/gate`（decision/confirm 分布、未签列表）、`budget/alarm`（默认预算一致性、
+s6 预算=1 的报警条数）、`provider/key`（占位符拒绝）、`scan/detect`（paper 识别、
+7.8 质量门报警）、`wrappers/paths`（paper 名推导）、`driver/cli`（`--stale-days`
+默认值）、`docs/spec`（README 与代码口径一致）。
+
+构成：**16 条 `expr` + 2 条 `raises` + 2 条 `doc`**。expr/raises 全部真调本仓 API
+（`scripts/state.py`、`scripts/checkpoints.py`、`scripts/provider_check.py`、
+`scripts/scan_alarms.py`、`scripts/lib/wrappers.py`），期望值是现跑出来的，不是抄文档。
+
+```bash
+python3 eval/run_cases.py            # 通过条件：20/20 cases passed（pass_rate = 1.0）
+python3 eval/run_cases.py --save     # 顺带把结果写进 eval/run-report.json
+python3 eval/run_cases.py --selftest # 篡改一条期望值，必须变红（19/20）
+```
+
+**数字如何复算**：`eval/run-report.json` 里每条 case 都带 `id` / `axis` / `detail`，
+把 `detail` 与 `cases.jsonl` 的 `verify` 代码一起看，就能从源码复现该数字；
+`--save` 重跑一次即可重建整份报告，不需要手工抄数。
+
+**失败归因**：`run_cases.py` 不只报通过率，失败时按 `axis` 汇总（例如
+`state/schema: 1 条 —— ST-01`），直接指出是哪个模块的哪个口径坏了。
