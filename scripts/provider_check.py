@@ -64,7 +64,7 @@ def validate_api_key(api_key: Optional[str]) -> tuple[bool, str]:
         if pat.match(api_key):
             return False, f"apiKey 是占位符（{api_key[:8]}...）；请替换为真实 MiniMax key"
     if not api_key.startswith("sk-"):
-        return False, f"apiKey 格式异常（应以 'sk-' 开头）"
+        return False, "apiKey 格式异常（应以 'sk-' 开头）"
     if len(api_key) < 20:
         return False, f"apiKey 长度异常（{len(api_key)} < 20）"
     return True, "ok"
@@ -93,7 +93,7 @@ def check_provider(config_path: Path = CONFIG_PATH, do_ping: bool = False) -> in
         print("FAIL: provider.minimax.models 为空", file=sys.stderr)
         return 1
 
-    print(f"OK: provider.minimax 配置正常")
+    print("OK: provider.minimax 配置正常")
     print(f"  apiKey     : {api_key[:8]}...{api_key[-4:]}  (len={len(api_key)})")
     print(f"  baseURL    : {m.get('options', {}).get('baseURL', '?')}")
     print(f"  models     : {', '.join(models.keys())}")

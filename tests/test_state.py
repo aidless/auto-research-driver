@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import io
-import json
 import sys
 import tempfile
 from contextlib import redirect_stderr, redirect_stdout

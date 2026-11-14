@@ -55,11 +55,10 @@ if str(_THIS) not in sys.path:
 
 # 同包内 import（用绝对 import 兼容两种调用方式）
 from state import (
-    DriverState, STAGES_ORDER, load_state, save_state,
-    mark_completed, mark_failed, state_path,
+    DriverState, STAGES_ORDER, load_state, mark_completed, mark_failed, state_path,
 )
 from checkpoints import (
-    CHECKPOINT_PLAN, get_checkpoint, is_signed, sign, require_sign, list_pending,
+    CHECKPOINT_PLAN, get_checkpoint, is_signed, sign, list_pending,
 )
 import provider_check
 from lib import wrappers as W
@@ -80,7 +79,7 @@ def cmd_status(args) -> int:
     打印 state.json 的关键字段 + 列出 pending checkpoint + 报警 + rerun 历史。
     只读，不修改 state。
     """
-    from state import list_alarms, get_stage_reruns
+    from state import list_alarms
     s = load_state(args.target_dir)
     print(f"target      : {args.target_dir}")
     print(f"stage       : {s.stage}")
@@ -274,7 +273,7 @@ def cmd_run(args) -> int:
         s.artifacts["idea_source"] = idea_source
 
     print("=" * 60)
-    print(f"  auto-research-driver")
+    print("  auto-research-driver")
     print(f"  target      : {target}")
     print(f"  from_stage  : {start}")
     print(f"  review_mode : {args.review_mode}")
@@ -453,7 +452,7 @@ def _stage_s4_draft(target: Path, args, state: DriverState) -> int:
         0 = 成功（无论覆盖或跳过）；非 0 = subprocess 失败
     """
     if (target / "main.tex").exists() and not args.force:
-        print(f"  [s4] main.tex exists; skip (use --force to overwrite)")
+        print("  [s4] main.tex exists; skip (use --force to overwrite)")
         state.artifacts["main_tex"] = str(target / "main.tex")
         return 0
     # 复用 tmlr_pipeline.run_pipeline.py 的 s4 行为

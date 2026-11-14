@@ -30,7 +30,7 @@ import sys
 import time
 from collections import Counter
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -275,7 +275,7 @@ def render_markdown(results: list, root: Path, stale_days: int) -> str:
     """生成 Markdown 报告。"""
     lines = []
     ts = datetime.now().isoformat(timespec="seconds")
-    lines.append(f"# 多 Paper 流水线报警汇总报告")
+    lines.append("# 多 Paper 流水线报警汇总报告")
     lines.append("")
     lines.append(f"- **生成时间**: {ts}")
     lines.append(f"- **扫描根目录**: `{root}`")
@@ -339,7 +339,7 @@ def render_markdown(results: list, root: Path, stale_days: int) -> str:
     # 3. 完整 paper 清单
     lines.append("## 完整 Paper 清单")
     lines.append("")
-    lines.append(f"| Paper | Driver | main.tex | main.pdf | refs.bib | 最近修改 | Alarm 数 |")
+    lines.append("| Paper | Driver | main.tex | main.pdf | refs.bib | 最近修改 | Alarm 数 |")
     lines.append("|---|---|---|---|---|---|---|")
     for r in sorted(results, key=lambda x: x.name):
         driver = "✓" if r.has_state else "✗"

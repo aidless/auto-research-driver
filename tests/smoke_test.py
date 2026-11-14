@@ -15,7 +15,6 @@ review 阶段本身需要 paper 才有意义；smoke 只走骨架）。
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -90,14 +89,14 @@ def main() -> int:
         rc, out = _run(["reset", "--target-dir", str(td)])
         assert rc == 0
         assert not state_path.exists(), "reset didn't remove state.json"
-        print(f"[smoke] reset OK")
+        print("[smoke] reset OK")
 
         # 7. driver checkpoints
         rc, out = _run(["checkpoints"])
         print(f"[smoke] checkpoints (first 500 chars):\n{out[:500]}")
         assert "S1" in out and "S6" in out
 
-    print(f"\n[smoke] ALL PASS")
+    print("\n[smoke] ALL PASS")
     return 0
 
 

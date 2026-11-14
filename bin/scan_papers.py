@@ -1,7 +1,6 @@
 """scan_papers.py - one-shot scanner used by the e2e diagnostic above.
 Non-destructive: only reads directory listings.
 """
-import os
 from pathlib import Path
 
 root = Path(r'F:\Research')

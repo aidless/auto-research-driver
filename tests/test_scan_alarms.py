@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -31,7 +30,6 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 from scan_alarms import (  # noqa: E402
     Alarm,
     PaperScan,
-    PAPER_MARKERS,
     is_paper_dir,
     safe_load_state,
     collect_papers,
@@ -40,7 +38,6 @@ from scan_alarms import (  # noqa: E402
     scan_all,
     render_markdown,
     render_json,
-    LATEX_ERROR_PATTERN,
 )
 
 

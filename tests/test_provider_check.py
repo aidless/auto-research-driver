@@ -23,7 +23,6 @@ from provider_check import (  # noqa: E402
     validate_api_key,
     load_minimax_config,
     check_provider,
-    PLACEHOLDER_PATTERNS,
     main as provider_main,
 )
 

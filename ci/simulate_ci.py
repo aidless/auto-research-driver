@@ -78,7 +78,7 @@ def main() -> int:
     if summary_path.exists():
         summary_path.unlink()
 
-    print(f"::notice::Simulating GitHub Actions ci.yml locally")
+    print("::notice::Simulating GitHub Actions ci.yml locally")
     print(f"::notice::Time: {datetime.now().isoformat()}")
     print(f"::notice::GITHUB_WORKSPACE = {os.environ['GITHUB_WORKSPACE']}")
     print(f"::notice::GITHUB_STEP_SUMMARY = {os.environ['GITHUB_STEP_SUMMARY']}")
@@ -186,8 +186,8 @@ def main() -> int:
         md.append("```\n")
         md.append("### Artifacts\n")
         md.append(f"- 📊 HTML report: `coverage-html` (size: {html_size} KB)")
-        md.append(f"- 📦 Raw data: `coverage-data/.coverage`")
-        md.append(f"- 📝 Logs: `ci-logs/ci_*.log`")
+        md.append("- 📦 Raw data: `coverage-data/.coverage`")
+        md.append("- 📝 Logs: `ci-logs/ci_*.log`")
         md.append("")
         append_summary("\n".join(md))
         print("::notice::step summary written")
