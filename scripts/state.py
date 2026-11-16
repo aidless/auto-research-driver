@@ -216,7 +216,10 @@ def save_state(state: DriverState, target_dir: Path) -> None:
     state.updated_at = _now_iso()
     p = state_path(target_dir)
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(state.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(state.to_dict(), ensure_ascii=False, indent=2, default=_to_jsonable),
+        encoding="utf-8",
+    )
     # best-effort fsync
     try:
         if hasattr(os, "fdopen"):
@@ -228,6 +231,48 @@ def save_state(state: DriverState, target_dir: Path) -> None:
     except OSError:
         pass  # Windows 上 tmp 文件可能仍被句柄持有，忽略
     os.replace(tmp, p)
+
+
+def _to_jsonable(obj):
+    """json.dumps fallback. Tuples (idea_source) become lists.
+
+    CPython does not promise that a tuple encodes. Lists round-trip through
+    load_state. This does not invent fields.
+    """
+    if isinstance(obj, tuple):
+        return list(obj)
+    raise TypeError(f"not JSON serializable: {type(obj).__name__}")
+
+
+def progress_snapshot(state: DriverState) -> dict:
+    """Copy progress fields a failed stage must not keep.
+
+    Failure accounting (run_count, last_error, rerun_history, alarms, budget)
+    is left out on purpose. rollback_progress does not restore those.
+    """
+    return {
+        "stage": state.stage,
+        "completed": list(state.completed),
+        "artifacts": dict(state.artifacts),
+        "scores": dict(state.scores),
+        "user_signatures": dict(state.user_signatures),
+    }
+
+
+def rollback_progress(state: DriverState, snapshot: dict, failed_stage: str, target_dir: Path) -> None:
+    """Restore progress fields to the snapshot taken before `failed_stage`.
+
+    Files already written under target_dir are not deleted. run_count,
+    last_error, rerun_history, alarms, and budget stay as mark_failed left
+    them. A later run is not blocked.
+    """
+    state.stage = snapshot["stage"]
+    state.completed = list(snapshot["completed"])
+    state.artifacts = dict(snapshot["artifacts"])
+    state.scores = dict(snapshot["scores"])
+    state.user_signatures = dict(snapshot["user_signatures"])
+    state.next_action = f"rolled_back_before_{failed_stage}"
+    save_state(state, target_dir)
 
 
 def mark_completed(state: DriverState, stage: str, target_dir: Path) -> None:

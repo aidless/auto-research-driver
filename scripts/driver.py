@@ -14,7 +14,8 @@
 
 设计：driver 是 stateful 的薄壳。所有"做什么"由 lib/wrappers.py 调用既有组件。
 driver 只负责：(1) provider sanity，(2) state.json 持久化，(3) checkpoint 闸门，
-(4) 失败时回滚到上一个 safe stage。
+(4) 失败时把进度字段回滚到该 stage 开始前的快照（run_count / alarms 保留；
+不删 target_dir 里已经写下的文件；预算报警不阻止下一次 run）。
 
 不在这里实现真正的 TMLR 流水线逻辑——那是 tmlr_pipeline.run_pipeline.py 的事。
 
@@ -42,6 +43,7 @@ driver 只负责：(1) provider sanity，(2) state.json 持久化，(3) checkpoi
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -56,6 +58,7 @@ if str(_THIS) not in sys.path:
 # 同包内 import（用绝对 import 兼容两种调用方式）
 from state import (
     DriverState, STAGES_ORDER, load_state, mark_completed, mark_failed, state_path,
+    progress_snapshot, rollback_progress,
 )
 from checkpoints import (
     CHECKPOINT_PLAN, get_checkpoint, is_signed, sign, list_pending,
@@ -233,9 +236,11 @@ def cmd_run(args) -> int:
         0 = 正常完成或 pause（不是失败，pause 是 waiting for user signature）
         非 0 = 失败（provider check / stage rc != 0 / 参数错）
     """
-    # 1. provider sanity
+    # 1. provider sanity. --config lets a test point at a missing file.
+    # The default path is the author-machine MiniMax config, not a portable one.
     if not args.skip_provider_check:
-        rc = provider_check.check_provider()
+        cfg = getattr(args, "config", None) or provider_check.CONFIG_PATH
+        rc = provider_check.check_provider(cfg)
         if rc != 0:
             print("ABORT: provider check failed; use --skip-provider-check to override", file=sys.stderr)
             return rc
@@ -289,10 +294,12 @@ def cmd_run(args) -> int:
             continue
 
         print(f"\n[run] {stage}")
+        snap = progress_snapshot(s)
         rc = _run_stage(stage, target, args, s)
 
         if rc != 0:
             mark_failed(s, stage, f"rc={rc}", target)
+            rollback_progress(s, snap, stage, target)
             print(f"FAIL: stage {stage} 返回 {rc}; state 已记录 last_error", file=sys.stderr)
             return rc
 
@@ -304,6 +311,7 @@ def cmd_run(args) -> int:
         spec = get_checkpoint(stage)
         if spec and not is_signed(s, stage) and not args.skip_checkpoints:
             print(f"\n{'='*60}\n  CHECKPOINT: {spec.title}\n{'='*60}")
+            print("NOTE: the prompt below is specification text, not a measurement of this run.")
             print(spec.prompt)
             print(f"{'='*60}")
             print(f"drive paused at {stage}. use 'driver sign ...' to continue.")
@@ -325,6 +333,11 @@ def _run_stage(stage: str, target: Path, args, state: DriverState) -> int:
     Returns:
         subprocess rc：0 = 成功，非 0 = 失败
     """
+    # Test seam only. ARD_FAIL_STAGE=<stage name> returns 7 before any wrapper.
+    forced = os.environ.get("ARD_FAIL_STAGE")
+    if forced and stage == forced:
+        print(f"FAIL: ARD_FAIL_STAGE={forced}", file=sys.stderr)
+        return 7
     if stage == "s1_idea":
         return _stage_s1_idea(target, args, state)
     elif stage == "s2_lit":
@@ -451,6 +464,16 @@ def _stage_s4_draft(target: Path, args, state: DriverState) -> int:
     Returns:
         0 = 成功（无论覆盖或跳过）；非 0 = subprocess 失败
     """
+    if getattr(args, "stub", False):
+        tex = target / "main.tex"
+        tex.write_text(
+            "% STUB artifact. Sister repo tmlr_pipeline was not called.\n"
+            "% This is not a paper.\n",
+            encoding="utf-8",
+        )
+        state.artifacts["main_tex"] = str(tex)
+        state.artifacts["stub"] = "true"
+        return 0
     if (target / "main.tex").exists() and not args.force:
         print("  [s4] main.tex exists; skip (use --force to overwrite)")
         state.artifacts["main_tex"] = str(target / "main.tex")
@@ -474,6 +497,18 @@ def _stage_s5_review(target: Path, args, state: DriverState) -> int:
     Returns:
         subprocess rc：0 = 成功；非 0 = 找不到 paper / 模拟器失败
     """
+    if getattr(args, "stub", False):
+        reviews_dir = target / "reviews"
+        reviews_dir.mkdir(parents=True, exist_ok=True)
+        note = reviews_dir / "STUB_REVIEW.md"
+        note.write_text(
+            "# STUB review\n\n"
+            "Sister repos were not called. No v2.4 score was measured.\n"
+            "v24_final: null\n",
+            encoding="utf-8",
+        )
+        state.artifacts["stub_review"] = str(note)
+        return 0
     paper = W.find_main_tex(target) or W.find_main_pdf(target)
     if paper is None:
         print(f"FAIL: {target} 下找不到 main.tex / main.pdf", file=sys.stderr)
@@ -538,6 +573,17 @@ def _stage_s6_submit(target: Path, args, state: DriverState) -> int:
 
     副作用：state.artifacts["submit_checklist"] 写入
     """
+    if getattr(args, "stub", False):
+        p = target / "submit"
+        p.mkdir(parents=True, exist_ok=True)
+        checklist = p / "checklist.md"
+        checklist.write_text(
+            "# STUB checklist\n\n"
+            "Sister repos were not called. Nothing was submitted.\n",
+            encoding="utf-8",
+        )
+        state.artifacts["submit_checklist"] = str(checklist)
+        return 0
     p = target / "submit"
     p.mkdir(parents=True, exist_ok=True)
     checklist = p / "checklist.md"
@@ -568,7 +614,7 @@ def main() -> int:
     """
     ap = argparse.ArgumentParser(
         prog="driver",
-        description="auto-research-driver — TMLR end-to-end pipeline driver",
+        description="auto-research-driver — offline gate driver for stage names S1–S6",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -587,6 +633,10 @@ def main() -> int:
     p_run.add_argument("--skip-checkpoints", action="store_true", help="不暂停在 checkpoint")
     p_run.add_argument("--skip-provider-check", action="store_true", help="跳过 provider sanity")
     p_run.add_argument("--force", action="store_true", help="覆盖已完成 stage")
+    p_run.add_argument("--stub", action="store_true",
+                       help="write stub S4–S6 artifacts and do not call sister repos")
+    p_run.add_argument("--config", type=Path, default=None,
+                       help="provider config for the pre-run check (default: author-machine path)")
     p_run.set_defaults(func=cmd_run)
 
     # status

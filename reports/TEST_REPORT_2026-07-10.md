@@ -1,3 +1,5 @@
+> **Author-machine archive, not recomputed here.** Figures below, including any S5 note about PAPER5_CONSOLIDATED, were written on the author's Windows machine on 2026-07-10. `make check` does not rerun them. This file is not a TMLR submission, score, or acceptance.
+
 # auto-research-driver v1.0 — 测试总结报告
 
 > **归档日期**：2026-07-10 11:09 (Asia/Shanghai)

@@ -1,6 +1,8 @@
 # auto-research-driver (v1.0) — 使用文档
 
-> TMLR 端到端流水线编排器。driver 不是新工具，是把 `tmlr_pipeline` + `tmlr-review-simulator` + `paper-reviewer-tmlr-corpus v2.4` + `paper-writing-agent` 串起来的薄壳。
+> **Author-machine notes.** Paths such as `C:\Users\Administrator\.mavis\...` and `F:\Research\...` are the author's Windows machine, not a fresh clone. This file is not evidence that a paper was generated. Offline recompute is `make check` in the repository root.
+
+> TMLR 端到端流水线编排器。driver 不是新工具，是把 `tmlr_pipeline` + `tmlr-review-simulator` + `paper-reviewer-tmlr-corpus v2.4` + `paper-writing-agent` 串起来的薄壳。下面的命令是作者环境里的用法草稿，不是本 checkout 的测量结果。
 
 ## 安装
 

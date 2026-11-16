@@ -16,4 +16,6 @@ jobs:
       # PyYAML is optional at runtime, but the suite has a test for the YAML
       # parsing path; install it so that path is exercised rather than skipped.
       - run: python -m pip install pytest pyyaml
-      - run: python -m pytest tests -q
+      # Same command as a fresh clone: pytest, stub gate trace, eval cases.
+      # Does not call sister repos or a model provider.
+      - run: make check

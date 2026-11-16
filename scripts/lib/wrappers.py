@@ -3,6 +3,12 @@
 不重写逻辑，只 subprocess 调用 + returncode + 路径规范化。所有硬编码路径统一在此模块，
 driver.py 不知道 F:/Research/ 在哪——换环境只改这里。
 
+AUTHOR_MACHINE_PATHS: every Path() below is an absolute path on the author's
+Windows machine (F:\\Research and C:\\Users\\Administrator). This repository
+does not install those trees. A missing file returns exit code 1 and does not
+start a subprocess. A fresh clone must not treat that return code as a run of
+the sister repo.
+
 被包装的入口：
 - run_pipeline.py     : F:/Research/tmlr_pipeline/src/run_pipeline.py  (S1-S6 全跑)
 - simulate_review.py  : F:/Research/tmlr-review-simulator/simulate_review.py  (单篇 simulator)

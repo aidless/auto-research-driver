@@ -71,6 +71,10 @@ jobs:
           coverage --version
           echo "skill_root=$(pwd)"
 
+      - name: Recompute stub gate trace
+        # Stdlib only. Proves the committed S1–S6 stub trace. Not a paper run.
+        run: python evidence/verify_trace.py
+
       - name: Run CI
         # 默认 mode；workflow_dispatch 时用用户选的 mode
         # 同时写到 ci_run.log（artifact 用）— 即使 step fail 也能拿到
