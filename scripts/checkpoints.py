@@ -6,6 +6,9 @@
 driver 在每个 stage 完成后、进入下一个之前，按 CHECKPOINT_PLAN 决定是否需要
 用户签字。state.json 里的 user_signatures 记录所有 checkpoint 的签字状态。
 
+prompt / title 是规格文案，不是一次运行的测量结果。本模块不计算 v24_final，
+也不在任何分数下自动从 S5 回到 S4。
+
 不在此模块做实际校验——校验由各 stage 自己负责（v24_review.py 读 v24_final 分等）。
 本模块只负责：
 1. 定义每个 stage 的 checkpoint 类型
@@ -124,11 +127,10 @@ CHECKPOINT_PLAN = {
     "s5_review": CheckpointSpec(
         stage="s5_review",
         kind="confirm",
-        title="S5 质量门：v2.4 ≥ 7.8 才能进 S6",
+        title="S5 确认点：review 报告需要人工确认",
         prompt=(
-            "v2.4 review 报告 + 4 persona 分数 + CRITICAL/MAJOR/MINOR 已生成。\n"
-            "质量门阈值：v24_final ≥ 7.8（来自 TMLR_COMPARISON_REPORT 前 10% 标准）。\n"
-            "未达标会自动触发 S4→S5 循环。\n"
+            "规格文案：外部 review 流程曾用 v24_final ≥ 7.8 作为讨论阈值。\n"
+            "本驱动不计算该分数，分数低于 7.8 时也不会自动回到 S4。\n"
             "签字命令：driver sign --target-dir <T> --checkpoint s5_review"
         ),
         gate_field="s5_review",

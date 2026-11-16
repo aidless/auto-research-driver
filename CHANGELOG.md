@@ -8,7 +8,9 @@ auto-research-driver 的所有显著变更都记录在这里。
 
 ## [Unreleased]
 
-无未发布内容。
+- Offline stub trace of the S1–S6 gate machine (`evidence/`), with `make check` as the fresh-clone entry.
+- Failed stages roll progress fields back to the pre-stage snapshot. Budget alarms still do not stop a later run.
+- README states what is proven offline and what is not. No paper outcome is claimed for this checkout.
 
 ---
 

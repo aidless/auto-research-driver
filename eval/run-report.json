@@ -117,7 +117,7 @@
    "id": "DC-01",
    "axis": "docs/spec",
    "ok": true,
-   "detail": "quality gate of v2.4 ≥ 7.8"
+   "detail": "The 7.8 figure is prompt text in `checkp"
   },
   {
    "id": "DC-02",

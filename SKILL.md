@@ -1,24 +1,25 @@
 ---
 name: auto-research-driver
 description: |
-  TMLR 全自动科研 driver——把现有 tmlr_pipeline 6 阶段 + paper-writing-agent 21 模块 + paper-reviewer-tmlr-corpus v2.4 + tmlr-review-simulator 串成端到端流水线。
-  输入：idea（一句话 / arxiv id / 实验目录）→ 输出：投递就绪 paper 工程（≥ v2.4 7.8 分签字）。
+  Specification for a six-stage TMLR driver. Not a measured paper pipeline.
+  Offline evidence is the stub gate trace under evidence/. Sister-repo paths below are author-machine paths and are not installed by a fresh clone.
   中文触发词：跑一篇 TMLR、auto research driver、从 idea 到 TMLR 论文、TMLR 端到端流水线、自动化科研、全自动科研助手。
-  English: TMLR end-to-end driver, auto research pipeline, idea to TMLR submission, full-auto ML research assistant.
+  English: TMLR stage-gate specification, offline stub trace, not a measured submission.
 version: 1.0.0
-status: implemented
-last-verified: 2026-07-10 11:08 (PAPER5_CONSOLIDATED S5 review 通过 + 22/22 unit tests PASS + smoke ALL PASS + 95% coverage)
+status: specification-only
+last-verified: not remeasured in this checkout
 dependencies:
-  - tmlr_pipeline (F:\Research\tmlr_pipeline)
-  - paper-writing-agent (F:\Research\paper-writing-agent)
-  - paper-reviewer-tmlr-corpus v2.4 (C:\Users\Administrator\.mavis\skills\paper-reviewer-tmlr-corpus)
-  - tmlr-review-simulator (C:\Users\Administrator\.mavis\skills\tmlr-review-simulator)
-  - light-orchestrator / light-paper-polishing / light-self-review / light-typesetting
-  - light-literature-search / light-citation / light-figure-planning / light-figure-drawing
-  - brainstorming-research / idea-evaluator / verification / writing-chapters
-  - research_radar_v2 + deep_read_v2 (F:\Research\_research_radar)
-  - memory_architecture/run_experiment.py (F:\Research\memory_architecture)
-  - F:\Research obsidian vault (811 md, 26 论文线索)
+  # AUTHOR_MACHINE_PATHS — not installed here, not evidence that a stage ran.
+  - "AUTHOR_MACHINE_PATH: tmlr_pipeline (F:\\Research\\tmlr_pipeline)"
+  - "AUTHOR_MACHINE_PATH: paper-writing-agent (F:\\Research\\paper-writing-agent)"
+  - "AUTHOR_MACHINE_PATH: paper-reviewer-tmlr-corpus v2.4 (C:\\Users\\Administrator\\.mavis\\skills\\paper-reviewer-tmlr-corpus)"
+  - "AUTHOR_MACHINE_PATH: tmlr-review-simulator (C:\\Users\\Administrator\\.mavis\\skills\\tmlr-review-simulator)"
+  - "AUTHOR_MACHINE_PATH: light-orchestrator / light-paper-polishing / light-self-review / light-typesetting"
+  - "AUTHOR_MACHINE_PATH: light-literature-search / light-citation / light-figure-planning / light-figure-drawing"
+  - "AUTHOR_MACHINE_PATH: brainstorming-research / idea-evaluator / verification / writing-chapters"
+  - "AUTHOR_MACHINE_PATH: research_radar_v2 + deep_read_v2 (F:\\Research\\_research_radar)"
+  - "AUTHOR_MACHINE_PATH: memory_architecture/run_experiment.py (F:\\Research\\memory_architecture)"
+  - "AUTHOR_MACHINE_PATH: F:\\Research obsidian vault (author count 811 md / 26 leads; not remeasured here)"
 tags:
   - research
   - tmlr
@@ -31,15 +32,17 @@ tags:
 
 # auto-research-driver (TMLR 端到端 driver)
 
+> **UNMEASURED SPECIFICATION.** This file describes a wished-for orchestration. A fresh clone does not contain the sister repos. The only recomputed result in this checkout is `evidence/s1_s6_stub_trace.json` (`make check`). No TMLR submission, acceptance, score, or cost figure below has been measured here. Paths under `F:\` and `C:\Users\Administrator` are **author-machine paths**.
+
 ## 定位
 
-不是新工具，是 **driver 层**——把现有 5 个独立子系统（tmlr_pipeline 6 阶段 / paper-writing-agent 21 模块 / paper-reviewer-tmlr-corpus v2.4 / tmlr-review-simulator / light-* 12 个 skill）按 TMLR 投稿工作流**串起来**。
+不是新工具，是 **driver 层规格**——打算把 5 个独立子系统按 TMLR 投稿工作流串起来。本 checkout 没有这些子系统，也没有把它们串成一次论文运行。
 
-**承诺 vs 现实**：
-- ✅ 承诺：idea → 投递就绪 paper 的端到端流水线，每个 S 都有 checkpoint
-- ✅ 承诺：≥ v2.4 7.8 分（前 10%）质量门（参考 `F:\Research\TMLR_COMPARISON_REPORT.md`）
-- ⚠️ 不承诺：idea 一定是 top 1% novelty——novelty 是 S1 checkpoint 必须人工拍板的
-- ⚠️ 不承诺：投稿必收——TMLR 接收还有运气成分
+**规格 vs 本仓测到的**：
+- 规格（未测到论文）：idea → 投递就绪 paper，每个 S 都有 checkpoint 文案
+- 规格（未测到分数）：v2.4 7.8 出现在旧文案和作者机器上的比较报告路径里。`scripts/driver.py` 不计算该分数，也不在低分时自动回到 S4
+- 本仓离线测到：checkpoint 会挡住未签字的 stage；`driver sign` 之后才能继续；失败会回滚进度字段；预算报警写入 `state.alarms` 且不阻止下一次 run
+- 不承诺：idea 一定是 top 1% novelty，也不承诺投稿被接收。本仓没有投稿结果
 
 ## 6 阶段流程（与 tmlr_pipeline 对齐 + 增强）
 
@@ -104,7 +107,7 @@ OUTPUT: arxiv ZIP + cover letter + checklist
 | 工具 | `paper-reviewer-tmlr-corpus v2.4`（4 角色：复现审 / 统计审 / 新颖审 / 文风审）+ `tmlr-review-simulator`（4 agent：Specialist / Editor / Critic / Reflection）+ `light-self-review` |
 | 输入 | main.tex + refs.bib + figures/ |
 | 输出 | `review_report.md`（v2.4 4 角色分数 + CRITICAL/MAJOR/MINOR 三档 + per-finding 修订示例）|
-| 循环 | score < 7.8 自动触发 S4 → S5；≥ 7.8 进 S6 |
+| 循环 | 规格里写过 score < 7.8 回到 S4。`scripts/driver.py` 没有这条回路，也不写入 v24_final |
 | 检查点 | 用户看 review 报告（**这是质量门，不是装饰**）|
 
 ### S6 Submit
@@ -286,6 +289,10 @@ mavis driver run --idea "..." --auto-loop --notify-cron sample_budget_check
 
 ## 开发路线图
 
+下面的勾选和日期来自作者机器上的笔记（`reports/TEST_REPORT_2026-07-10.md`）。本 checkout 没有重跑那些步骤，不能把它们当成当前证据。
+
+
+
 - [x] **v1.0**（2026-07-09 骨架 + 2026-07-10 实测验证）：骨架 + S5 端到端实跑通过 + 11/11 tests PASS
   - 6 阶段骨架 + state.json 持久化（atomic write + corrupt recovery） + checkpoint 闸门
   - provider sanity check（占位符 / 缺失 / 格式 / 长度 / 真实格式 5 项）
@@ -320,4 +327,4 @@ mavis driver run --idea "..." --auto-loop --notify-cron sample_budget_check
 
 ---
 
-**TL;DR**：跑 `mavis driver run --idea-auto` 即可开始；或者把今天 sample_budget 跑完的 data 接 s4 → s5 直接出 draft。
+**TL;DR**：离线复算跑 `make check`。`driver run` 在没有 sister workspace 和 provider 配置时不应该被说成一次论文生成。

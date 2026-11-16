@@ -1,0 +1,178 @@
+{
+  "budget_alarm": {
+    "alarm_count_after_second": 1,
+    "alarm_has_budget_prefix": true,
+    "alarm_stage": "s6_submit",
+    "completed_after_first": [
+      "s1_idea",
+      "s2_lit",
+      "s3_outline",
+      "s4_draft",
+      "s5_review"
+    ],
+    "first_rc": 7,
+    "s6_completed_after_first": false,
+    "s6_completed_after_second": true,
+    "second_rc": 0,
+    "stops_run": false
+  },
+  "budget_alarm_stops_run": false,
+  "budget_caps": {
+    "s1_idea": 2,
+    "s2_lit": 3,
+    "s3_outline": 2,
+    "s4_draft": 3,
+    "s5_review": 4,
+    "s6_submit": 1
+  },
+  "corrupt_recovery": {
+    "backup_exists": true,
+    "completed_empty": true,
+    "last_error_prefix": "corrupt",
+    "stage": "s1_idea"
+  },
+  "events": [
+    {
+      "event": "stage_completed",
+      "rc": 0,
+      "stage": "s1_idea"
+    },
+    {
+      "event": "checkpoint_blocked",
+      "kind": "decision",
+      "stage": "s1_idea"
+    },
+    {
+      "event": "signed",
+      "stage": "s1_idea"
+    },
+    {
+      "event": "stage_completed",
+      "rc": 0,
+      "stage": "s2_lit"
+    },
+    {
+      "event": "checkpoint_blocked",
+      "kind": "confirm",
+      "stage": "s2_lit"
+    },
+    {
+      "event": "signed",
+      "stage": "s2_lit"
+    },
+    {
+      "event": "stage_completed",
+      "rc": 0,
+      "stage": "s3_outline"
+    },
+    {
+      "event": "checkpoint_blocked",
+      "kind": "decision",
+      "stage": "s3_outline"
+    },
+    {
+      "event": "signed",
+      "stage": "s3_outline"
+    },
+    {
+      "event": "stage_completed",
+      "rc": 0,
+      "stage": "s4_draft"
+    },
+    {
+      "event": "checkpoint_blocked",
+      "kind": "confirm",
+      "stage": "s4_draft"
+    },
+    {
+      "event": "signed",
+      "stage": "s4_draft"
+    },
+    {
+      "event": "stage_completed",
+      "rc": 0,
+      "stage": "s5_review"
+    },
+    {
+      "event": "checkpoint_blocked",
+      "kind": "confirm",
+      "stage": "s5_review"
+    },
+    {
+      "event": "signed",
+      "stage": "s5_review"
+    },
+    {
+      "event": "stage_completed",
+      "rc": 0,
+      "stage": "s6_submit"
+    },
+    {
+      "event": "checkpoint_blocked",
+      "kind": "decision",
+      "stage": "s6_submit"
+    },
+    {
+      "event": "signed",
+      "stage": "s6_submit"
+    }
+  ],
+  "final_completed": [
+    "s1_idea",
+    "s2_lit",
+    "s3_outline",
+    "s4_draft",
+    "s5_review",
+    "s6_submit"
+  ],
+  "missing_sister": {
+    "author_machine_literal_in_source": true,
+    "path_class": "author-machine",
+    "rc": 1,
+    "subprocess_calls": 0
+  },
+  "paper_outcome": null,
+  "pending_after_signs": 0,
+  "provider_misconfig": {
+    "completed": [],
+    "direct_check_rc": 1,
+    "rc": 1,
+    "stage_was_called": false
+  },
+  "rollback": {
+    "budget_alarm_count": 0,
+    "completed_after": [
+      "s1_idea"
+    ],
+    "failed_stage": "s2_lit",
+    "failed_stage_in_completed": false,
+    "first_rc": 0,
+    "next_action": "rolled_back_before_s2_lit",
+    "rc": 7,
+    "refs_bib_exists": false,
+    "run_count": 1,
+    "stage_after": "s2_lit"
+  },
+  "schema": "gate-trace-v1",
+  "sign_bypass": {
+    "completed": [
+      "s1_idea",
+      "s2_lit",
+      "s3_outline",
+      "s4_draft",
+      "s5_review",
+      "s6_submit"
+    ],
+    "rc": 0,
+    "signatures_set": false,
+    "v24_final": null
+  },
+  "sister_repos_invoked": false,
+  "stub_markers": {
+    "checklist_not_submitted": true,
+    "main_tex": true,
+    "review_null_score": true
+  },
+  "subprocess_calls": 0,
+  "v24_final": null
+}

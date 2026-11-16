@@ -38,6 +38,7 @@ def check(name, ok, detail=""):
         FAIL += 1
         FAILS.append(f"{name}: {detail}")
         print(f"  FAIL: {name} -- {detail}")
+        raise AssertionError(f"{name}: {detail}")
 
 
 # ============================================================
@@ -289,6 +290,8 @@ def main():
     for t in tests:
         try:
             t()
+        except AssertionError:
+            pass
         except Exception as e:
             check(f"{t.__name__} (uncaught exception)", False,
                   f"{type(e).__name__}: {e}")

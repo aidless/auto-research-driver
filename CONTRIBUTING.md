@@ -13,11 +13,11 @@ pip install -r requirements.txt   # if present
 ## Verifying your change
 
 ```bash
-python3 -m pytest -q
+python3 -m pip install pytest pyyaml
+make check
 ```
 
-If the repository has a `Makefile`, `make check` or the closest equivalent runs the same
-checks as CI. Please run it before opening a pull request.
+`make check` is what `checks.yml` and `pr-checks.yml` run. It does not call sister repositories.
 
 ## Pull requests
 

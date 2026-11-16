@@ -13,8 +13,8 @@ jobs:
         with:
           python-version: "3.11"
       - name: Syntax check (compileall)
-        run: python -m compileall -q . || true
-      - name: Tests if present
+        run: python -m compileall -q .
+      - name: Offline gate checks
         run: |
-          if [ -f requirements.txt ]; then pip install -q -r requirements.txt || true; fi
-          if command -v pytest >/dev/null 2>&1; then pytest -q; else echo "no pytest"; fi
+          python -m pip install pytest pyyaml
+          make check

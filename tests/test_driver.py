@@ -41,6 +41,7 @@ def check(name, ok, detail=""):
         FAIL += 1
         FAILS.append(f"{name}: {detail}")
         print(f"  FAIL: {name} -- {detail}")
+        raise AssertionError(f"{name}: {detail}")
 
 
 # ============================================================
@@ -439,7 +440,7 @@ def test_cmd_run_resume_from_state_when_from_stage_not_given():
 
 
 def test_cmd_run_skips_completed_stages():
-    """已完成 stage + 不 --force → 跳过 + 不调 _run_stage。"""
+    """已完成的 s1–s5 跳过；未完成的 s6 仍会跑一次。"""
     target = Path(tempfile.mkdtemp(prefix="drv_test_run_"))
     fake_state = driver.DriverState(
         stage="s6_submit",
@@ -457,10 +458,10 @@ def test_cmd_run_skips_completed_stages():
         buf = io_str()
         with redirect_stdout(buf):
             rc = driver.cmd_run(args)
-    check("all skipped → rc=0", rc == 0, f"got {rc}")
-    check("_run_stage NEVER called (all skipped)",
-          mrun.call_count == 0,
-          f"called {mrun.call_count} times")
+    check("completed stages skipped, s6 still runs → rc=0", rc == 0, f"got {rc}")
+    check("_run_stage called only for incomplete s6",
+          mrun.call_count == 1 and mrun.call_args[0][0] == "s6_submit",
+          f"called {mrun.call_count} times, args={mrun.call_args}")
     out = buf.getvalue()
     check("stdout mentions [skip]",
           "[skip]" in out,
@@ -643,6 +644,8 @@ def main():
     for t in tests:
         try:
             t()
+        except AssertionError:
+            pass
         except Exception as e:
             check(f"{t.__name__} (uncaught)", False,
                   f"{type(e).__name__}: {e}")

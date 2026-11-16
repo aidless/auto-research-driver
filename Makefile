@@ -1,8 +1,11 @@
-# --- acceptance_backfill (EVAL_ACCEPTANCE_STANDARD.md P4) ---
-# 证据来源: checks.yml
-# 命令逐字取自该来源，未增删任何参数。
-# 归一: python → python3（本机无 python 别名，实测 Error 127）
-.PHONY: eval
+# Offline evidence. No sister repos and no network.
+# checks.yml and pr-checks.yml call this same target.
+.PHONY: check eval
+
+check:
+	python3 -m pytest tests -q
+	python3 evidence/verify_trace.py
+	python3 eval/run_cases.py
 
 eval:
-	python3 -m pytest tests -q
+	python3 eval/run_cases.py

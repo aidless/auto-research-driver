@@ -1,6 +1,8 @@
 # auto-research-driver GitHub Actions Workflows
 
-本目录包含 5 个 GitHub Actions workflow：
+The offline evidence claim lives in the repository README under "What CI covers". `checks.yml` and `pr-checks.yml` run `make check`. `ci.yml` runs `ci/run_tests.py --full` plus `evidence/verify_trace.py`. The table below is a partial catalog of workflows, not that claim.
+
+本目录包含多个 GitHub Actions workflow（下表不是全量）：
 
 | Workflow | 触发 | 用途 | Runner | 频率 |
 |----------|------|------|--------|------|
